@@ -8,21 +8,58 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.lang.System;
+import java.lang.Runnable;
 
 public class QuorumServiceHandler implements QuorumService.Iface
 {
 	List<Node> activeNodes;
-	private static String CURRENT_NODE_IP	= "";
+	private static String CURRENT_NODE_IP		= "";
 	private static int CURRENT_NODE_PORT		= 0;
-
-	public QuorumServiceHandler(Node currentNode)
+	private static int SLEEP_TIMEOUT			= 60000;	
+	String [] filenames							= null;	
+	String FILE_DIR								= "";
+	
+	public QuorumServiceHandler(Node currentNode,String directory,String[] filenames)
 	{
-		activeNodes		= new ArrayList<Node>();
-		CURRENT_NODE_IP	= currentNode.ip;
-		CURRENT_NODE_PORT= currentNode.port;
+		activeNodes			= new ArrayList<Node>();
+		CURRENT_NODE_IP		= currentNode.ip;
+		CURRENT_NODE_PORT	= currentNode.port;
 		activeNodes.add(currentNode);
+		FILE_DIR			= directory;	
+		if(filenames != null)
+		{
+			this.filenames		= new String[filenames.length];
+			for(int i=0;i<filenames.length;i++)
+				this.filenames[i]	= filenames[i];
+		}
 	}
 
+	public void syncJob() 
+	{
+		Runnable syncThread = new Runnable() {
+         public void run() {
+				while(true)
+				{
+        			try
+					{
+						Util.syncData(activeNodes,FILE_DIR,filenames,CURRENT_NODE_IP,CURRENT_NODE_PORT);
+						Thread.sleep(SLEEP_TIMEOUT);
+					}
+					catch(InterruptedException ex) {}
+					catch(TTransportException ex) {}
+					catch(TException ex){}
+				} 
+			}
+     	};
+		new Thread(syncThread).start();
+	}
+
+	@Override
+	public String version(String filename,String directory) throws TException
+	{
+		return Util.getMaxVersion(filename,directory);
+	}
+	
 	@Override
 	public List<Node> join(Node node) throws TException
 	{
@@ -68,13 +105,16 @@ public class QuorumServiceHandler implements QuorumService.Iface
 	}
 
     @Override
-	public boolean write(String filename,String writeDirectory,String content) throws TException
+	public boolean write(String filename,String writeDirectory,String content,boolean shouldCreate) throws TException
 	{
-		String maxVersion	= Util.getMaxVersion(filename,writeDirectory);
-		int nextVersion		= Integer.parseInt(maxVersion)+1;
-		String nfileName	= filename + "." + String.valueOf(nextVersion);
-		System.out.println("Write request received at " + CURRENT_NODE_IP+":"+CURRENT_NODE_PORT);
-		return Util.writeContent(writeDirectory+nfileName,content);
+		if(shouldCreate)
+		{
+			String maxVersion	= Util.getMaxVersion(filename,writeDirectory);
+			int nextVersion		= Integer.parseInt(maxVersion)+1;
+			filename			= filename + "." + String.valueOf(nextVersion);
+		}
+		System.out.println("Write request received at " + CURRENT_NODE_IP+":"+CURRENT_NODE_PORT + " with filename " + filename);
+		return Util.writeContent(writeDirectory+filename,content);
 	}
 	
 	@Override

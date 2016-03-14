@@ -142,7 +142,7 @@ public class Client
 				TProtocol writeProtocol				= new TBinaryProtocol(new TFramedTransport(writeTransport));
 				QuorumService.Client writeClient    = new QuorumService.Client(writeProtocol);
 				writeTransport.open();
-				boolean hasWritten					= writeClient.write(filename,FILE_DIR,Util.getFileContent(FILE_DIR+filename));
+				boolean hasWritten					= writeClient.write(filename,FILE_DIR,Util.getFileContent(FILE_DIR+filename),true);
 				System.out.println("Writing to " + requiredNodes.get(i).ip + " with port " + requiredNodes.get(i).port);
 				if(hasWritten==false)
 				{

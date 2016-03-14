@@ -1,5 +1,9 @@
 import java.util.*;
 import java.io.*;
+import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.transport.*;
+import org.apache.thrift.TException;
 
 public class Util
 {
@@ -87,6 +91,77 @@ public class Util
 		{
 			System.out.println(activeNodes.get(i).ip + "    " + activeNodes.get(i).port + "        " + activeNodes.get(i).id);
 			System.out.println("---------------------------------------------------------");
+		}
+	}
+	
+	public static void syncData(List<Node> activeNodes,String directory,String [] filenames,String CoordinatorIP,int CoordinatorPort) throws TTransportException,TException 
+	{
+		for(int i=0;i<filenames.length;i++)
+		{
+			String maxVersion		= "0";
+			int requiredIdx			= -1;
+			String currentVersion	= "";	
+			System.out.println("Starting syncing file " + filenames[i]);
+			for(int j=0;j<activeNodes.size();j++)
+			{
+				if(activeNodes.get(j).ip.equals(CoordinatorIP)==true && CoordinatorPort==activeNodes.get(j).port)
+					currentVersion	= getMaxVersion(filenames[i],directory);
+				else
+				{
+					TTransport transport				= new TSocket(activeNodes.get(j).ip,activeNodes.get(j).port);
+					TProtocol protocol					= new TBinaryProtocol(new TFramedTransport(transport));
+					QuorumService.Client client			= new QuorumService.Client(protocol);
+					transport.open();
+					currentVersion						= client.version(filenames[i],directory);
+					transport.close();
+				}
+				if(currentVersion.compareTo(maxVersion) > 0 )
+				{
+					maxVersion						= currentVersion;
+					requiredIdx						= j;
+				}
+				System.out.println("At Node " + activeNodes.get(j).ip+":"+activeNodes.get(j).port + " with version " + currentVersion);
+			}	
+			
+			if(requiredIdx != -1 )
+			{	
+				String requiredFileName					= filenames[i] + "." + maxVersion;
+				System.out.println("File name to be written " + requiredFileName);
+				String content							= "";
+				if(activeNodes.get(requiredIdx).ip.equals(CoordinatorIP)==true && CoordinatorPort==activeNodes.get(requiredIdx).port)
+					content								= getFileContent(directory+requiredFileName); 
+				else
+				{
+					TTransport transport                = new TSocket(activeNodes.get(requiredIdx).ip,activeNodes.get(requiredIdx).port);
+                	TProtocol protocol                  = new TBinaryProtocol(new TFramedTransport(transport));
+                	QuorumService.Client client         = new QuorumService.Client(protocol);
+                	transport.open();
+                	content 	                        = client.read(requiredFileName,directory,true);
+                	transport.close();
+				}
+				for(int j=0;j<activeNodes.size();j++)
+				{
+					if(j == requiredIdx) continue;
+					System.out.println("Syncing data at " + activeNodes.get(j).ip+":"+activeNodes.get(j).port + " with content " + content);
+					if(activeNodes.get(j).ip.equals(CoordinatorIP)==true && CoordinatorPort==activeNodes.get(j).port)
+						Util.writeContent(directory+requiredFileName,content);
+					else
+					{
+						TTransport writeTransport			= new TSocket(activeNodes.get(j).ip,activeNodes.get(j).port);
+						TProtocol writeProtocol				= new TBinaryProtocol(new TFramedTransport(writeTransport));
+						QuorumService.Client writeClient    = new QuorumService.Client(writeProtocol);
+						writeTransport.open();
+						boolean hasWritten					= writeClient.write(requiredFileName,directory,content,false);
+						System.out.println("Writing to " + activeNodes.get(j).ip + " with port " + activeNodes.get(j).port);
+						if(hasWritten==false)
+						{
+							System.out.println("Unable to write on node " + activeNodes.get(j).ip + " with port " + activeNodes.get(j).port);
+						}
+						writeTransport.close();
+					}
+				}
+			}
+			System.out.println(" ========================================================= " );
 		}
 	}
 }

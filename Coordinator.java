@@ -19,6 +19,10 @@ public class Coordinator
 	private static String CONFIG_FILE_NAME		= "";	
 	private static QuorumService.Processor processor;
 	private static String CURRENT_NODE_IP		= "";
+	private static String [] filenames			= null;
+	private static String FILE_KEY				= "Files";	
+	private static String FILE_DIR_KEY			= "FileDirectory";
+	private static String FILE_DIR				= "";
 
 	public static void main(String targs[]) throws TException
 	{
@@ -49,13 +53,14 @@ public class Coordinator
 		
 		TServerTransport serverTransport 		= new TServerSocket(PORT);
 		TTransportFactory factory				= new TFramedTransport.Factory();
-		QuorumServiceHandler quorum				= new QuorumServiceHandler(new Node(CURRENT_NODE_IP,PORT,Util.hash(CURRENT_NODE_IP+PORT)));
+		QuorumServiceHandler quorum				= new QuorumServiceHandler(new Node(CURRENT_NODE_IP,PORT,Util.hash(CURRENT_NODE_IP+PORT)),FILE_DIR,filenames);
 		processor								= new QuorumService.Processor(quorum);
 		TThreadPoolServer.Args args				= new TThreadPoolServer.Args(serverTransport);
 		args.processor(processor);
 		args.transportFactory(factory);
 		System.out.println("Starting Coordinator ....");
 		TThreadPoolServer server				= new TThreadPoolServer(args);
+		quorum.syncJob();
 		server.serve();
 	}	
 	
@@ -76,6 +81,10 @@ public class Coordinator
 					NW				= Integer.parseInt(tokens[1]);
 				if(tokens.length==2 && tokens[0].equals(COORDINATOR_PORT)==true)
 					PORT			= Integer.parseInt(tokens[1]);
+				if(tokens.length==2 && tokens[0].equals(FILE_KEY)==true)
+					filenames		= tokens[1].split(",");
+				if(tokens.length==2 && tokens[0].equals(FILE_DIR_KEY)==true)
+					FILE_DIR		= tokens[1];
 			}
 		}
 		catch(IOException e) {}

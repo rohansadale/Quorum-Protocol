@@ -82,7 +82,7 @@ public class FileServer
 			}
 			TServerTransport serverTransport 		= new TServerSocket(CURRENT_NODE_PORT);
 			TTransportFactory factory				= new TFramedTransport.Factory();
-			QuorumServiceHandler quorum				= new QuorumServiceHandler(new Node(CURRENT_NODE_IP,CURRENT_NODE_PORT,Util.hash(CURRENT_NODE_IP+CURRENT_NODE_PORT)));
+			QuorumServiceHandler quorum				= new QuorumServiceHandler(new Node(CURRENT_NODE_IP,CURRENT_NODE_PORT,Util.hash(CURRENT_NODE_IP+CURRENT_NODE_PORT)),"",null);
 			processor								= new QuorumService.Processor(quorum);
 			TThreadPoolServer.Args args				= new TThreadPoolServer.Args(serverTransport);
 			args.processor(processor);
