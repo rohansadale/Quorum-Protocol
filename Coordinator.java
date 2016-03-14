@@ -4,6 +4,9 @@ import org.apache.thrift.server.TSimpleServer;
 import org.apache.thrift.server.TThreadPoolServer;
 import org.apache.thrift.transport.*;
 import java.io.*;
+import org.apache.thrift.TException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 
 public class Coordinator
 {
@@ -15,9 +18,24 @@ public class Coordinator
 	private static int NW						= 0;
 	private static String CONFIG_FILE_NAME		= "";	
 	private static QuorumService.Processor processor;
+	private static String CURRENT_NODE_IP		= "";
 
 	public static void main(String targs[]) throws TException
 	{
+		try
+		{
+			CURRENT_NODE_IP			= InetAddress.getLocalHost().getHostName();
+		}
+		catch(Exception e)
+		{
+			System.out.println("Unable to get hostname ....");
+		}
+
+		if(CURRENT_NODE_IP=="")
+		{
+			System.out.println("Unable to get Current System's IP");
+			return;
+		}
 		if(targs.length==1)
 		{
 			CONFIG_FILE_NAME					= targs[0];
@@ -31,7 +49,7 @@ public class Coordinator
 		
 		TServerTransport serverTransport 		= new TServerSocket(PORT);
 		TTransportFactory factory				= new TFramedTransport.Factory();
-		QuorumServiceHandler quorum				= new QuorumServiceHandler();
+		QuorumServiceHandler quorum				= new QuorumServiceHandler(new Node(CURRENT_NODE_IP,PORT,Util.hash(CURRENT_NODE_IP+PORT)));
 		processor								= new QuorumService.Processor(quorum);
 		TThreadPoolServer.Args args				= new TThreadPoolServer.Args(serverTransport);
 		args.processor(processor);
@@ -49,25 +67,25 @@ public class Coordinator
 		try
 		{
 			br				= new BufferedReader(new FileReader(CONFIG_FILE_NAME));
-			while((content == br.readLine())!=null)
+			while((content = br.readLine())!=null)
 			{
 				String [] tokens 	= content.split(":");
 				if(tokens.length==2 && tokens[0].equals(QUORUM_READ_KEY)==true)
 					NR				= Integer.parseInt(tokens[1]);
 				if(tokens.length==2 && tokens[0].equals(QUORUM_WRITE_KEY)==true)
-					NW				= Integer.parseInt(tokens[1);
+					NW				= Integer.parseInt(tokens[1]);
 				if(tokens.length==2 && tokens[0].equals(COORDINATOR_PORT)==true)
 					PORT			= Integer.parseInt(tokens[1]);
 			}
 		}
-		catch(IOException) {}
+		catch(IOException e) {}
 		finally
 		{
 			try
 			{
 				if(br!=null) br.close();
 			}
-			catch(IOException){}
+			catch(IOException e){}
 		}
 	}
 }
