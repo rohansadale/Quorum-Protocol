@@ -16,12 +16,12 @@ public class FileServer
 	private static String CONFIG_FILE_NAME				= "";	
 	private static String CURRENT_NODE_IP				= "";   //Current Node IP
 	private static int CURRENT_NODE_PORT 				= 9091;
-	private static String COORDINATOR_PORT_KEY			= "CoordinatorPort";
-	private static String COORDINATOR_IP_KEY			= "CoordinatorIP";
-	private static int COORDINATOR_PORT					= 0;
-	private static String COORDINATOR_IP				= "";
-	private static List<Node> activeNodes				= null;
-	private static QuorumService.Processor processor;
+	private static String FILE_KEY						= "Files";
+	private static String QUORUM_READ_KEY				= "QuorumRead";
+	private static String QUORUM_WRITE_KEY				= "QuorumWrite";
+	private static String FILE_DIR_KEY					= "FileDirectory";
+	private static String COORDINATOR_IP				= "CoordinatorIP";
+	private static String COORDINATOR_PORT				= "CoordinatorPort";
 
 	public static void main(String targs[]) throws TException
 	{
@@ -44,7 +44,6 @@ public class FileServer
 		{
 			CURRENT_NODE_PORT					= Integer.parseInt(targs[1]);
 			CONFIG_FILE_NAME					= targs[0];
-			setParameters();
 		}
 		else
 		{
@@ -69,27 +68,18 @@ public class FileServer
 		}
 		if(activeNodes!=null)
 		{
-			for(int i=0;i<activeNodes.size();i++)
-			{
-				if(activeNodes.get(i).ip.equals(COORDINATOR_IP)==true && activeNodes.get(i).port == COORDINATOR_PORT) continue;
-				if(activeNodes.get(i).ip.equals(CURRENT_NODE_IP) == true && activeNodes.get(i).port == CURRENT_NODE_PORT) continue;
-				TTransport transport                = new TSocket(activeNodes.get(i).ip,activeNodes.get(i).port);
-            	TProtocol protocol                  = new TBinaryProtocol(new TFramedTransport(transport));
-            	QuorumService.Client client         = new QuorumService.Client(protocol);
-           	 	transport.open();
-            	boolean hasUpdated                  = client.update(activeNodes);
-            	transport.close();
-			}
-			TServerTransport serverTransport 		= new TServerSocket(CURRENT_NODE_PORT);
-			TTransportFactory factory				= new TFramedTransport.Factory();
-			QuorumServiceHandler quorum				= new QuorumServiceHandler(new Node(CURRENT_NODE_IP,CURRENT_NODE_PORT,Util.hash(CURRENT_NODE_IP+CURRENT_NODE_PORT)),"",null);
-			processor								= new QuorumService.Processor(quorum);
-			TThreadPoolServer.Args args				= new TThreadPoolServer.Args(serverTransport);
-			args.processor(processor);
-			args.transportFactory(factory);
+			HashMap<String,String> configParam	= Util.getInstance().getParameters(CONFIG_FILE_NAME);
+			String hashKey						= CURRENT_NODE_IP + CURRENT_NODE_PORT;
+			String hashKeyCoordinator			= configParam[COORDINATOR_IP] + configParam[COORDINATOR_PORT];
+			Node coordinatorNode				= new Node(configParam[COORDINATOR_IP],configParam[COORDINATOR_PORT],Util.getInstance().hash(hashKeyCoordinator));
+			Node currentNode					= new Node(CURRENT_NODE_IP,CURRENT_NODE_PORT,Util.getInstance().hash(hashKey));
+			QuorumServiceHandler quorum			= new QuorumServiceHandler(coordinatorNode,currentNode,configParam[FILE_DIR_KEY],
+																			new configParam[FILE_KEY].split(","),
+																			Integer.parseInt(config[QUORUM_READ_KEY]),
+																			Integer.parseInt(config[QUORUM_WRITE_KEY]));
+			TThreadPoolServer server			= Util.getInstance().getQuorumServer(CURRENT_NODE_PORT,quorum);
 			System.out.println("Starting fileServer at " + CURRENT_NODE_IP + " and Port " + CURRENT_NODE_PORT + "  ....");
-			TThreadPoolServer server				= new TThreadPoolServer(args);
-			server.serve();	
+			server.serve();
 		}
 		else
 		{
@@ -97,32 +87,4 @@ public class FileServer
 			return;
 		}
 	}	
-	
-	public static void setParameters()
-	{
-		String content;
-		BufferedReader br	= null;
-		
-		try
-		{
-			br				= new BufferedReader(new FileReader(CONFIG_FILE_NAME));
-			while((content = br.readLine())!=null)
-			{
-				String [] tokens 		= content.split(":");
-				if(tokens.length==2 && tokens[0].equals(COORDINATOR_PORT_KEY)==true)
-					COORDINATOR_PORT	= Integer.parseInt(tokens[1]);
-				if(tokens.length==2 && tokens[0].equals(COORDINATOR_IP_KEY)==true)
-					COORDINATOR_IP		= tokens[1];
-			}
-		}
-		catch(IOException e) {}
-		finally
-		{
-			try
-			{
-				if(br!=null) br.close();
-			}
-			catch(IOException e){}
-		}
-	}
 }

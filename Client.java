@@ -14,8 +14,6 @@ import org.apache.thrift.TException;
 public class Client
 {
 	private static String CONFIG_FILE_NAME				= "";
-	private static String COORDINATOR_PORT_KEY			= "CoordinatorPort";
-	private static String COORDINATOR_IP_KEY			= "CoordinatorIP";
 	private static String FILE_DIR_KEY					= "FileDirectory";
 	private static String FILE_DIR						= "";
 	private static int COORDINATOR_PORT					= 0;
@@ -25,11 +23,13 @@ public class Client
 	private static int OpType							= 0;
 	private static String filename					 	= "";
 	private static String content						= "";	
+	private static String CURRENT_NODE_IP				= "";
+	private static String FILE_KEY						= "Files";
 	private static String QUORUM_READ_KEY				= "QuorumRead";
 	private static String QUORUM_WRITE_KEY				= "QuorumWrite";
-	private static int NR								= 0;
-	private static int NW								= 0;
-	private static String CURRENT_NODE_IP				= "";
+	private static String FILE_DIR_KEY					= "FileDirectory";
+	private static String COORDINATOR_IP_KEY			= "CoordinatorIP";
+	private static String COORDINATOR_PORT				= "CoordinatorPort";
 
 	public static void main(String targs[]) throws TException
 	{
@@ -51,12 +51,12 @@ public class Client
 		if(targs.length>=3)
 		{
 			CONFIG_FILE_NAME					= targs[0];
-			setParameters();	
 			OpType								= Integer.parseInt(targs[1]);
 			filename							= targs[2];
-			if(0 == OpType) content				= Util.getFileContent(filename);			
+			if(0 == OpType) content				= Util.getInstance().getFileContent(filename);			
 		}	
-
+		
+		HashMap<String,String> configParam		= Util.getInstance().getParameters(CONFIG_FILE_NAME);
 		String currentVersion					= "0";
 		String maxVersion						= "0";
 		int requiredIdx							= -1;
@@ -151,38 +151,5 @@ public class Client
 				writeTransport.close();
 			}
 		}		
-	}
-	
-	public static void setParameters()
-	{
-		String content;
-		BufferedReader br	= null;
-		try
-		{
-			br				= new BufferedReader(new FileReader(CONFIG_FILE_NAME));
-			while((content = br.readLine())!=null)
-			{
-				String [] tokens 		= content.split(":");
-				if(tokens.length==2 && tokens[0].equals(QUORUM_READ_KEY)==true)
-					NR					= Integer.parseInt(tokens[1]);
-				if(tokens.length==2 && tokens[0].equals(QUORUM_WRITE_KEY)==true)
-					NW					= Integer.parseInt(tokens[1]);
-				if(tokens.length==2 && tokens[0].equals(COORDINATOR_PORT_KEY)==true)
-					COORDINATOR_PORT	= Integer.parseInt(tokens[1]);
-				if(tokens.length==2 && tokens[0].equals(COORDINATOR_IP_KEY)==true)
-					COORDINATOR_IP		= tokens[1];
-				if(tokens.length==2 && tokens[0].equals(FILE_DIR_KEY)==true)
-					FILE_DIR			= tokens[1];
-			}
-		}
-		catch(IOException e) {}
-		finally
-		{
-			try
-			{
-				if(br!=null) br.close();
-			}
-			catch(IOException e){}
-		}
 	}
 }

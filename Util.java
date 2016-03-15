@@ -7,7 +7,16 @@ import org.apache.thrift.TException;
 
 public class Util
 {
-	private static int MOD = 107;
+	private static int MOD 		= 107;
+	private static Util util 	= null;
+	
+	public static Util getInstance()
+	{
+		if(util==null)
+			util	= new Util();
+		return util;
+	}
+
 	public static long hash(String input)
 	{
 		long hash = 5381;
@@ -18,6 +27,42 @@ public class Util
 		}
 		return hash;		
 	}
+
+	public static TThreadPoolServer(String Port,QuorumServiceHandler quorum)
+	{
+		TServerTransport serverTransport    = new TServerSocket(Port);
+        TTransportFactory factory           = new TFramedTransport.Factory();
+        QuorumService.Processor processor   = new QuorumService.Processor(quorum);
+        TThreadPoolServer.Args args         = new TThreadPoolServer.Args(serverTransport);
+        args.processor(processor);
+        args.transportFactory(factory);
+		return new TThreadPoolServer(args);
+	}
+
+	public static HashMap<String,String> getParameters(String filename)
+	{
+		BufferedReader br	= null;
+		HashMap<String,String> params	= new HashMap<String,String>();
+		try
+		{
+			br				= new BufferedReader(new FileReader(CONFIG_FILE_NAME));
+			while((content = br.readLine())!=null)
+			{
+				String [] tokens 	= content.split(":");
+				params.put(tokens[0],tokens[1]);
+			}
+		}
+		catch(IOException e) {}
+		finally
+		{
+			try
+			{
+				if(br!=null) br.close();
+			}
+			catch(IOException e){}
+		}
+		return params;
+	}	
 	
 	public static String getMaxVersion(String filename,String directory)
 	{

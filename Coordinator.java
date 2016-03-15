@@ -10,19 +10,13 @@ import java.net.UnknownHostException;
 
 public class Coordinator
 {
-	private static int PORT						= 0;
-	private static String COORDINATOR_PORT		= "CoordinatorPort";
-	private static String QUORUM_READ_KEY		= "QuorumRead";
-	private static String QUORUM_WRITE_KEY		= "QuorumWrite";
-	private static int NR						= 0;
-	private static int NW						= 0;
-	private static String CONFIG_FILE_NAME		= "";	
-	private static QuorumService.Processor processor;
-	private static String CURRENT_NODE_IP		= "";
-	private static String [] filenames			= null;
-	private static String FILE_KEY				= "Files";	
-	private static String FILE_DIR_KEY			= "FileDirectory";
-	private static String FILE_DIR				= "";
+	private static String CONFIG_FILE_NAME				= "";	
+	private static String CURRENT_NODE_IP				= "";
+	private static String FILE_KEY						= "Files";	
+	private static String QUORUM_READ_KEY				= "QuorumRead";
+	private static String QUORUM_WRITE_KEY				= "QuorumWrite";
+	private static String FILE_DIR_KEY					= "FileDirectory";
+	private static String COORDINATOR_PORT				= "CoordinatorPort";
 
 	public static void main(String targs[]) throws TException
 	{
@@ -43,7 +37,6 @@ public class Coordinator
 		if(targs.length==1)
 		{
 			CONFIG_FILE_NAME					= targs[0];
-			setParameters();
 		}
 		else
 		{
@@ -51,50 +44,16 @@ public class Coordinator
 			return;
 		}
 		
-		TServerTransport serverTransport 		= new TServerSocket(PORT);
-		TTransportFactory factory				= new TFramedTransport.Factory();
-		QuorumServiceHandler quorum				= new QuorumServiceHandler(new Node(CURRENT_NODE_IP,PORT,Util.hash(CURRENT_NODE_IP+PORT)),FILE_DIR,filenames);
-		processor								= new QuorumService.Processor(quorum);
-		TThreadPoolServer.Args args				= new TThreadPoolServer.Args(serverTransport);
-		args.processor(processor);
-		args.transportFactory(factory);
-		System.out.println("Starting Coordinator ....");
-		TThreadPoolServer server				= new TThreadPoolServer(args);
+		HashMap<String,String> configParam	= Util.getInstance().getParameters(CONFIG_FILE_NAME);
+		String hashKey						= CURRENT_NODE_IP + configParam[COORDINATOR_PORT];
+		Node currentNode					= new Node(CURRENT_NODE_IP,configParam[COORDINATOR_PORT],Util.getInstance().hash(hashKey));
+		QuorumServiceHandler quorum			= new QuorumServiceHandler(currentNode,currentNode,configParam[FILE_DIR_KEY],
+																		new configParam[FILE_KEY].split(","),
+																		Integer.parseInt(config[QUORUM_READ_KEY]),
+																		Integer.parseInt(config[QUORUM_WRITE_KEY]));
+		TThreadPoolServer server			= Util.getInstance().getQuorumServer(CURRENT_NODE_PORT,quorum);	
+		quorum.pollJobQueue();	
 		quorum.syncJob();
 		server.serve();
 	}	
-	
-	public static void setParameters()
-	{
-		String content;
-		BufferedReader br	= null;
-		
-		try
-		{
-			br				= new BufferedReader(new FileReader(CONFIG_FILE_NAME));
-			while((content = br.readLine())!=null)
-			{
-				String [] tokens 	= content.split(":");
-				if(tokens.length==2 && tokens[0].equals(QUORUM_READ_KEY)==true)
-					NR				= Integer.parseInt(tokens[1]);
-				if(tokens.length==2 && tokens[0].equals(QUORUM_WRITE_KEY)==true)
-					NW				= Integer.parseInt(tokens[1]);
-				if(tokens.length==2 && tokens[0].equals(COORDINATOR_PORT)==true)
-					PORT			= Integer.parseInt(tokens[1]);
-				if(tokens.length==2 && tokens[0].equals(FILE_KEY)==true)
-					filenames		= tokens[1].split(",");
-				if(tokens.length==2 && tokens[0].equals(FILE_DIR_KEY)==true)
-					FILE_DIR		= tokens[1];
-			}
-		}
-		catch(IOException e) {}
-		finally
-		{
-			try
-			{
-				if(br!=null) br.close();
-			}
-			catch(IOException e){}
-		}
-	}
 }
