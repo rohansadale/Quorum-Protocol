@@ -1,5 +1,6 @@
 import java.io.*;
 import java.util.*;
+import java.text.DecimalFormat;
 import java.security.SecureRandom;
 import java.math.BigInteger;
 import java.net.InetAddress;
@@ -46,6 +47,9 @@ public class TestCases
 		String Write									= "append";
 	
 		int writes										= 0;
+		int reads										= 0;
+		long writeTime									= 0;
+		long readTime									= 0;
 		int status										= 0;
 		int tc											= 100;
 		String command									= "";
@@ -69,7 +73,8 @@ public class TestCases
 				try
 				{
 					FileWriter	fw = new FileWriter(directory+filename,true);
-					fw.write(new BigInteger(130,new SecureRandom()).toString(32) +  " From " + CURRENT_NODE_IP + "\n");
+					fw.write(new BigInteger(130,new SecureRandom()).toString(32) +  " From " + CURRENT_NODE_IP);
+					fw.write("\n");
 					fw.close();
 					command	= baseCmdWrite + filename;
 				}
@@ -77,6 +82,7 @@ public class TestCases
 			}
 			else
 			{
+				reads++;
 				command	= baseCmdRead + filenames[rnd.nextInt(filenames.length)];
 			}
 			
@@ -84,7 +90,13 @@ public class TestCases
 			{
 				System.out.println("Running command " + command);
 				Runtime r = Runtime.getRuntime();
+				long before	= System.currentTimeMillis();
 				Process p = r.exec(command);
+				long after  = System.currentTimeMillis();
+
+				if(0==status) writeTime	= writeTime + after-before;
+				else readTime	= readTime + after-before;
+
 				BufferedReader b = new BufferedReader(new InputStreamReader(p.getInputStream()));
 				String line = "";
 	
@@ -95,6 +107,10 @@ public class TestCases
 			}
 			catch(IOException e) {}
 		}
-		System.out.println("Writes :- " + writes);
+		
+		DecimalFormat df 				= new DecimalFormat("#.###");
+		double avgReadTime				= ((double)readTime*1.0)/reads;
+		double avgWriteTime				= ((double)writeTime*1.0)/writes;
+		System.out.println("Average Read Time :- " + df.format(avgReadTime)  + " milli-seconds\nAverage Write Time :- " + df.format(avgWriteTime) + " milli-seconds");
 	}
 }
