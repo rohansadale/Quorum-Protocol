@@ -14,7 +14,6 @@ import org.apache.thrift.TException;
 public class Client
 {
 	private static String CONFIG_FILE_NAME				= "";
-	private static String FILE_DIR_KEY					= "FileDirectory";
 	private static String FILE_DIR						= "";
 	private static int COORDINATOR_PORT					= 0;
 	private static String COORDINATOR_IP				= "";
@@ -29,7 +28,7 @@ public class Client
 	private static String QUORUM_WRITE_KEY				= "QuorumWrite";
 	private static String FILE_DIR_KEY					= "FileDirectory";
 	private static String COORDINATOR_IP_KEY			= "CoordinatorIP";
-	private static String COORDINATOR_PORT				= "CoordinatorPort";
+	private static String COORDINATOR_PORT_KEY			= "CoordinatorPort";
 
 	public static void main(String targs[]) throws TException
 	{
@@ -53,17 +52,13 @@ public class Client
 			CONFIG_FILE_NAME					= targs[0];
 			OpType								= Integer.parseInt(targs[1]);
 			filename							= targs[2];
-			if(0 == OpType) content				= Util.getInstance().getFileContent(filename);			
 		}	
-		
-		HashMap<String,String> configParam		= Util.getInstance().getParameters(CONFIG_FILE_NAME);
-		String currentVersion					= "0";
-		String maxVersion						= "0";
-		int requiredIdx							= -1;
 
+		HashMap<String,String> configParam  	= Util.getInstance().getParameters(CONFIG_FILE_NAME);		
+		if(1 == OpType) content					= Util.getInstance().getFileContent(configParam.get(FILE_DIR_KEY)+filename);			
 		try
 		{
-			TTransport transport				= new TSocket(COORDINATOR_IP,COORDINATOR_PORT);
+			TTransport transport				= new TSocket(configParam.get(COORDINATOR_IP_KEY),Integer.parseInt(configParam.get(COORDINATOR_PORT_KEY)));
 			TProtocol protocol					= new TBinaryProtocol(new TFramedTransport(transport));
 			QuorumService.Client client			= new QuorumService.Client(protocol);
 			transport.open();
@@ -82,74 +77,23 @@ public class Client
 			System.out.println("Unable to connect to Node... Exiting ...");
 			return;
 		}
-
-		System.out.println("Connecting to Node " + startNode.ip + " with port " + startNode.port + " with Optype " + OpType);
-		//Connect with the nodes to get set of nodes for performing read/write op		
-		try
-		{
-			TTransport conTransport					= new TSocket(startNode.ip,startNode.port);
-			TProtocol conProtocol					= new TBinaryProtocol(new TFramedTransport(conTransport));
-			QuorumService.Client conClient			= new QuorumService.Client(conProtocol);
-			conTransport.open();	
-			requiredNodes							= conClient.getNodes(OpType==0?NR:NW);	
-			conTransport.close();
-		}
-		catch(TException x)
-		{
-				System.out.println(" =================== Unable to establish connection with Randomly selected Node ... Exiting ... ================="+x);
-				return;
-		}
-		if(null==requiredNodes)
-		{	
-			System.out.println("Unable to obtain to set of nodes to perform the operation .... Exiting ...");
-			return;
-		}
-		if(0==OpType)
-		{
-			for(int i=0;i<requiredNodes.size();i++)
-			{
-				System.out.println("Reading from " + requiredNodes.get(i).ip + " with port " + requiredNodes.get(i).port);
-				TTransport readTransport			= new TSocket(requiredNodes.get(i).ip,requiredNodes.get(i).port);
-				TProtocol readProtocol				= new TBinaryProtocol(new TFramedTransport(readTransport));
-				QuorumService.Client readClient		= new QuorumService.Client(readProtocol);
-				readTransport.open();
-				currentVersion						= readClient.read(filename,FILE_DIR,false);
-				readTransport.close();
-				if(currentVersion.compareTo(maxVersion) > 0 )
-				{
-					maxVersion						= currentVersion;
-					requiredIdx						= i;
-				}
-			}
-			filename								= filename + "." + maxVersion;
-			if(requiredIdx != -1)
-			{
-				TTransport freadTransport			= new TSocket(requiredNodes.get(requiredIdx).ip,requiredNodes.get(requiredIdx).port);
-				TProtocol freadProtocol				= new TBinaryProtocol(new TFramedTransport(freadTransport));
-				QuorumService.Client freadClient	= new QuorumService.Client(freadProtocol);
-				freadTransport.open();
-				String content						= freadClient.read(filename,FILE_DIR,true);
-				freadTransport.close();
-				System.out.println("Latest Content of file " + filename +" is " + content);
-			}
-			else System.out.println("File not Present!!!");
-		}
+	
+		System.out.println("Initially Connected to :- " + startNode.ip + ":" + startNode.port);	
+		Job job									= new Job(startNode,1,OpType,filename,content);
+		TTransport transport					= new TSocket(startNode.ip,startNode.port);
+		TProtocol Protocol						= new TBinaryProtocol(new TFramedTransport(transport));
+		QuorumService.Client Client				= new QuorumService.Client(Protocol);
+		transport.open();
+		JobStatus status						= Client.submitJob(job);
+		transport.close();
+		if(status == null) System.out.println("Unable to finish the job");
 		else
 		{
-			for(int i=0;i<requiredNodes.size();i++)
-			{
-				TTransport writeTransport			= new TSocket(requiredNodes.get(i).ip,requiredNodes.get(i).port);
-				TProtocol writeProtocol				= new TBinaryProtocol(new TFramedTransport(writeTransport));
-				QuorumService.Client writeClient    = new QuorumService.Client(writeProtocol);
-				writeTransport.open();
-				boolean hasWritten					= writeClient.write(filename,FILE_DIR,Util.getFileContent(FILE_DIR+filename),true);
-				System.out.println("Writing to " + requiredNodes.get(i).ip + " with port " + requiredNodes.get(i).port);
-				if(hasWritten==false)
-				{
-					System.out.println("Unable to write on node " + requiredNodes.get(i).ip + " with port " + requiredNodes.get(i).port);
-				}
-				writeTransport.close();
-			}
-		}		
+			System.out.println("Job Status :- " + status.status);
+			if(0==OpType) System.out.println("Content :- " + status.content);
+			System.out.println("Following nodes were contacted :- ");
+			for(int i=0;status.path != null && i<status.path.size();i++)
+				System.out.println(status.path.get(i).ip + ":" + status.path.get(i).port);
+		}
 	}
 }

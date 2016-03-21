@@ -22,6 +22,7 @@ public class FileServer
 	private static String FILE_DIR_KEY					= "FileDirectory";
 	private static String COORDINATOR_IP				= "CoordinatorIP";
 	private static String COORDINATOR_PORT				= "CoordinatorPort";
+	private static List<Node> activeNodes				= null;	
 
 	public static void main(String targs[]) throws TException
 	{
@@ -51,10 +52,11 @@ public class FileServer
 			return;
 		}
 	
+		HashMap<String,String> configParam	= Util.getInstance().getParameters(CONFIG_FILE_NAME);
 		boolean hasRegistered					= false;	
 		try
 		{
-			TTransport transport				= new TSocket(COORDINATOR_IP,COORDINATOR_PORT);
+			TTransport transport				= new TSocket(configParam.get(COORDINATOR_IP),Integer.parseInt(configParam.get(COORDINATOR_PORT)));
 			TProtocol protocol					= new TBinaryProtocol(new TFramedTransport(transport));
 			QuorumService.Client client			= new QuorumService.Client(protocol);
 			transport.open();
@@ -68,15 +70,15 @@ public class FileServer
 		}
 		if(activeNodes!=null)
 		{
-			HashMap<String,String> configParam	= Util.getInstance().getParameters(CONFIG_FILE_NAME);
 			String hashKey						= CURRENT_NODE_IP + CURRENT_NODE_PORT;
-			String hashKeyCoordinator			= configParam[COORDINATOR_IP] + configParam[COORDINATOR_PORT];
-			Node coordinatorNode				= new Node(configParam[COORDINATOR_IP],configParam[COORDINATOR_PORT],Util.getInstance().hash(hashKeyCoordinator));
+			String hashKeyCoordinator			= configParam.get(COORDINATOR_IP) + configParam.get(COORDINATOR_PORT);
+			Node coordinatorNode				= new Node(configParam.get(COORDINATOR_IP),Integer.parseInt(configParam.get(COORDINATOR_PORT)),
+													Util.getInstance().hash(hashKeyCoordinator));
 			Node currentNode					= new Node(CURRENT_NODE_IP,CURRENT_NODE_PORT,Util.getInstance().hash(hashKey));
-			QuorumServiceHandler quorum			= new QuorumServiceHandler(coordinatorNode,currentNode,configParam[FILE_DIR_KEY],
-																			new configParam[FILE_KEY].split(","),
-																			Integer.parseInt(config[QUORUM_READ_KEY]),
-																			Integer.parseInt(config[QUORUM_WRITE_KEY]));
+			QuorumServiceHandler quorum			= new QuorumServiceHandler(coordinatorNode,currentNode,configParam.get(FILE_DIR_KEY),
+																			configParam.get(FILE_KEY).split(","),
+																			Integer.parseInt(configParam.get(QUORUM_READ_KEY)),
+																			Integer.parseInt(configParam.get(QUORUM_WRITE_KEY)));
 			TThreadPoolServer server			= Util.getInstance().getQuorumServer(CURRENT_NODE_PORT,quorum);
 			System.out.println("Starting fileServer at " + CURRENT_NODE_IP + " and Port " + CURRENT_NODE_PORT + "  ....");
 			server.serve();

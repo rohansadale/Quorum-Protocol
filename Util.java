@@ -1,9 +1,10 @@
 import java.util.*;
 import java.io.*;
-import org.apache.thrift.protocol.TBinaryProtocol;
-import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.*;
 import org.apache.thrift.TException;
+import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.server.TThreadPoolServer;
+import org.apache.thrift.protocol.TBinaryProtocol;
 
 public class Util
 {
@@ -28,7 +29,7 @@ public class Util
 		return hash;		
 	}
 
-	public static TThreadPoolServer(String Port,QuorumServiceHandler quorum)
+	public static TThreadPoolServer getQuorumServer(int Port,QuorumServiceHandler quorum) throws TTransportException
 	{
 		TServerTransport serverTransport    = new TServerSocket(Port);
         TTransportFactory factory           = new TFramedTransport.Factory();
@@ -42,10 +43,11 @@ public class Util
 	public static HashMap<String,String> getParameters(String filename)
 	{
 		BufferedReader br	= null;
+		String content		= "";
 		HashMap<String,String> params	= new HashMap<String,String>();
 		try
 		{
-			br				= new BufferedReader(new FileReader(CONFIG_FILE_NAME));
+			br				= new BufferedReader(new FileReader(filename));
 			while((content = br.readLine())!=null)
 			{
 				String [] tokens 	= content.split(":");
@@ -113,6 +115,7 @@ public class Util
 
 	public static boolean writeContent(String filename,String content)
 	{
+		System.out.println("File name :- " + filename + " and content " + content);
 		try
 		{
         	BufferedWriter br   = new BufferedWriter(new FileWriter( filename));
@@ -181,7 +184,7 @@ public class Util
                 	TProtocol protocol                  = new TBinaryProtocol(new TFramedTransport(transport));
                 	QuorumService.Client client         = new QuorumService.Client(protocol);
                 	transport.open();
-                	content 	                        = client.read(requiredFileName,directory,true);
+                	content 	                        = client.read(requiredFileName,directory);
                 	transport.close();
 				}
 				for(int j=0;j<activeNodes.size();j++)
@@ -196,7 +199,7 @@ public class Util
 						TProtocol writeProtocol				= new TBinaryProtocol(new TFramedTransport(writeTransport));
 						QuorumService.Client writeClient    = new QuorumService.Client(writeProtocol);
 						writeTransport.open();
-						boolean hasWritten					= writeClient.write(requiredFileName,directory,content,false);
+						boolean hasWritten					= writeClient.write(requiredFileName,directory,content);
 						System.out.println("Writing to " + activeNodes.get(j).ip + " with port " + activeNodes.get(j).port);
 						if(hasWritten==false)
 						{
