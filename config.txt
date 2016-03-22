@@ -1,5 +1,5 @@
-QuorumRead:5
-QuorumWrite:4
+QuorumRead:1
+QuorumWrite:10
 CoordinatorPort:9090
 CoordinatorIP:csel-kh4250-01.cselabs.umn.edu
 FileDirectory:/export/scratch/
