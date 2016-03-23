@@ -11,6 +11,7 @@ public class Util
 	private static int MOD 		= 107;
 	private static Util util 	= null;
 	
+	//Creating Singleton instance of the class	
 	public static Util getInstance()
 	{
 		if(util==null)
@@ -18,6 +19,7 @@ public class Util
 		return util;
 	}
 
+	//Function to generate hash value for given string
 	public static long hash(String input)
 	{
 		long hash = 5381;
@@ -29,6 +31,7 @@ public class Util
 		return hash;		
 	}
 
+	//Function that takes port number and QuorumServiceObject as its paramter and returns TThreadPoolServer object
 	public static TThreadPoolServer getQuorumServer(int Port,QuorumServiceHandler quorum) throws TTransportException
 	{
 		TServerTransport serverTransport    = new TServerSocket(Port);
@@ -40,6 +43,7 @@ public class Util
 		return new TThreadPoolServer(args);
 	}
 
+	//Utility function to read configuration file and returns hash-map containg paramters and their values
 	public static HashMap<String,String> getParameters(String filename)
 	{
 		BufferedReader br	= null;
@@ -65,7 +69,8 @@ public class Util
 		}
 		return params;
 	}	
-	
+
+	//Function that iterates over all the files in the directory and returns maximum version of the file that is available locally.	
 	public static String getMaxVersion(String filename,String directory)
 	{
 		String maxVersion               = "0";
@@ -89,6 +94,7 @@ public class Util
         return maxVersion;
 	}
 
+	//Function to read contents of the file
 	public static String getFileContent(String filename)
 	{
 		String content;
@@ -113,6 +119,7 @@ public class Util
         return sb.toString();
 	}
 
+	//Function to write content to the given file
 	public static boolean writeContent(String filename,String content)
 	{
 		System.out.println("File name :- " + filename + " and content " + content);
@@ -129,6 +136,7 @@ public class Util
         return true;
 	}
 
+	//Utility function to print nodes that are curently part of the system
 	public static void printNodeList(List<Node> activeNodes)
 	{
 		System.out.println("Currently Nodes connected to Coordinator ... ");
@@ -141,7 +149,12 @@ public class Util
 			System.out.println("---------------------------------------------------------");
 		}
 	}
-	
+
+	/*
+	Function to sync data across nodes that are part of the network
+	This function is quite big but what it essentially does is that for every file it established connection with all the nodes to get the latest content and version number
+	and after getting latest version it replicates the content across all the nodes that don't have latest copy
+	*/	
 	public static void syncData(List<Node> activeNodes,String directory,String [] filenames,String CoordinatorIP,int CoordinatorPort) throws TTransportException,TException 
 	{
 		for(int i=0;i<filenames.length;i++)

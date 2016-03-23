@@ -8,6 +8,9 @@ import org.apache.thrift.protocol.TProtocol;
 import java.util.concurrent.locks.ReentrantLock;
 import org.apache.thrift.protocol.TBinaryProtocol;
 
+/*
+This file implements the interface
+*/
 public class QuorumServiceHandler implements QuorumService.Iface
 {
 	List<Node> activeNodes;
@@ -22,7 +25,10 @@ public class QuorumServiceHandler implements QuorumService.Iface
 	String baseDirectory						= "";
 	Queue<Job> jobQueue							= null;
 	private final Lock lock 					= new ReentrantLock();
-		
+	
+	/*
+	Initializing the Service Handler with Configuration Parameters
+	*/	
 	public QuorumServiceHandler(Node coordinatorNode,Node currentNode,String directory,String[] filenames,int ReadQuorum,int WriteQuorum)
 	{
 		activeNodes				= new ArrayList<Node>();
@@ -41,15 +47,21 @@ public class QuorumServiceHandler implements QuorumService.Iface
 			this.filenames[i]	= filenames[i];
 	}
 
+	/*
+	Function to get randomly selected numNodes from the system
+	*/
 	public List<Node> getNodes(int numNodes) throws TException
 	{
-		Collections.shuffle(activeNodes);
+		Collections.shuffle(activeNodes); //shuffing the list and selecting top numNodes from the collection
 		List<Node> result	= new ArrayList<Node>();
 		for(int i=0;i<Math.min(activeNodes.size(),numNodes);i++)
 			result.add(activeNodes.get(i));
 		return result;
 	}
 	
+	/*
+	Background thread that actuall performs task of synchronizing the content among different replicas
+	*/
 	public void syncJob() 
 	{
 		Runnable syncThread = new Runnable() 
@@ -72,6 +84,11 @@ public class QuorumServiceHandler implements QuorumService.Iface
 		new Thread(syncThread).start();
 	}
 
+	/*
+		Function that takes job to be performed as parameters and returns the status of the job
+		This functions checks type of job i.e whether it is read or write and depending on that it contacts coordinator to perform the job
+		This is where we have ensured sequential consistency i.e we have used locks so that at a time only one client could be executing the job
+	*/
 	private JobStatus processJob(Job job) throws TException,TTransportException
 	{
 		JobStatus result				= null;
@@ -116,6 +133,13 @@ public class QuorumServiceHandler implements QuorumService.Iface
 		return result;
 	}
 
+	/*
+	A utility function that takes 
+		- List of the nodes
+		- Job Object
+		- MaxVersion of the file which is involved the the job
+		- Index of node on which operation is to be performed (only used when operation is read)
+	*/
 	private JobStatus doJob(List<Node> nodes,Job job,String maxVersion,int idx) throws TException,TTransportException
 	{
 		if(idx==-1) return new JobStatus(false,"",null);
@@ -137,6 +161,9 @@ public class QuorumServiceHandler implements QuorumService.Iface
 		}
 	}
 
+	/*
+	Function that actually establishes TCP connection with required machine on the network and reads the file and returns the content of the file
+	*/
 	private JobStatus doReadJob(String ip,int port,String filename) throws TException,TTransportException
 	{
 		String content				= "";
@@ -149,6 +176,9 @@ public class QuorumServiceHandler implements QuorumService.Iface
 		return new JobStatus(true,content,null);
 	}
 
+	/*
+	Function that actually establishes TCP connection with required machine on the network and writes the file on that machine
+	*/
 	private boolean doWriteJob(String ip,int port,String filename,String content) throws TException,TTransportException
 	{
 		boolean status				= false;
@@ -161,6 +191,9 @@ public class QuorumServiceHandler implements QuorumService.Iface
 		return status;
 	}
 
+	/*
+	Function that is responsible for including the node in the network and returns list of nodes that are currently in the system.
+	*/
 	@Override
 	public List<Node> join(Node node) throws TException
 	{
@@ -178,6 +211,9 @@ public class QuorumServiceHandler implements QuorumService.Iface
 		return activeNodes;
 	}
 
+	/*
+	Function that returns randomly selected node from set of nodes that are in the network
+	*/
 	@Override
 	public Node GetNode() throws TException
 	{
@@ -187,12 +223,18 @@ public class QuorumServiceHandler implements QuorumService.Iface
 		return activeNodes.get(rnd.nextInt(activeNodes.size()));
 	}
 	
+	/*
+	Function to get maximum version that is currently available
+	*/
 	@Override
 	public String version(String filename,String directory) throws TException
 	{
 		return Util.getMaxVersion(filename,directory);
 	}
 	
+	/*
+	Function to read the file locally
+	*/
 	@Override
     public String read(String filename,String readDirectory) throws TException
 	{
@@ -200,6 +242,9 @@ public class QuorumServiceHandler implements QuorumService.Iface
 		return Util.getFileContent(readDirectory+filename);
 	}
 
+	/*
+	Function to write the file locally given filename and its content
+	*/
     @Override
 	public boolean write(String filename,String writeDirectory,String content) throws TException
 	{
@@ -207,6 +252,10 @@ public class QuorumServiceHandler implements QuorumService.Iface
 		return Util.writeContent(writeDirectory+filename,content);
 	}
 	
+	/*
+	Function that actually receives request from client and checks whether requests need to be forwarded to coordinator or current node is the coordinator
+	If current node is coordinator then job is performed else connection to coordinator is established and then coordinator performs the job 
+	*/
 	@Override
 	public JobStatus submitJob(Job job) throws TException,TTransportException
 	{

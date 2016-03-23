@@ -9,6 +9,12 @@ import org.apache.thrift.server.TServer.Args;
 import org.apache.thrift.server.TSimpleServer;
 import org.apache.thrift.server.TThreadPoolServer;
 
+/*
+- This is the Coordinator file which reads configuration paramters from the configuration file provided as command line argument and Multi-Threaded Server which listens
+to requests coming from different file-servers.
+- Coordinator also runs background thread whose job is to sync content across all nodes in the system
+*/
+
 public class Coordinator
 {
 	private static String CONFIG_FILE_NAME				= "";	
@@ -52,8 +58,9 @@ public class Coordinator
 																		configParam.get(FILE_KEY).split(","),
 																		Integer.parseInt(configParam.get(QUORUM_READ_KEY)),
 																		Integer.parseInt(configParam.get(QUORUM_WRITE_KEY)));
+		//Initializing the server
 		TThreadPoolServer server			= Util.getInstance().getQuorumServer(Integer.parseInt(configParam.get(COORDINATOR_PORT_KEY)),quorum);	
-		quorum.syncJob();
+		quorum.syncJob(); //Starts a thread to sync job across different machines
 		server.serve();
 	}	
 }

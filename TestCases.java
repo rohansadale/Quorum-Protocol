@@ -6,6 +6,21 @@ import java.math.BigInteger;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
+/*
+This file is used for testing system under various cirumstances i.e varying workload.
+Paramters Nr and Nw can be set in config.txt
+To Run this file provide with two command line parameters:-
+	* configuration file path
+	* type of work-load
+		- 0 for equal read/write work load
+		- 1 for read heavy work load
+		- 2 write heavy workload
+
+This script will run 100 operations combining read and write. If workload is set as read-heavy then approximately 80% of operations are read and if workload
+is write-heavy then approximately 80% of operations are write and in equal workload case 50% are read and 50% write.
+Script is completely randomized i.e while reading randomly file is selected among the set of feasible file  and while writing again random file is selected and random string is written and along with that string ip-address of client is also written. 
+*/
+
 public class TestCases
 {
 	private static String CONFIG_FILE_NAME				= "";
@@ -35,7 +50,8 @@ public class TestCases
 			System.out.println("Please enter proper command line arguments. Pass config.txt and type of load you want 0 => Equal, 1 => Read-Heavy, 2 => Write heavy");
 			return;
 		}		
-		
+	
+		//Setting variables and reading parameters	
 		CONFIG_FILE_NAME								= targs[0];
 		int loadType									= Integer.parseInt(targs[1]);
 		HashMap<String,String> configParam  			= Util.getInstance().getParameters(CONFIG_FILE_NAME);
@@ -56,6 +72,7 @@ public class TestCases
 
 		for(int i=0;i<tc;i++)
 		{
+			//Depending upon load-type operation is set
 			if(loadType == 0)
 				status		= rnd.nextInt(2);
 			else if(loadType == 1)
@@ -91,9 +108,10 @@ public class TestCases
 				System.out.println("Running command " + command);
 				Runtime r = Runtime.getRuntime();
 				long before	= System.currentTimeMillis();
-				Process p = r.exec(command);
+				Process p = r.exec(command); //Executing the command 
 				long after  = System.currentTimeMillis();
-
+				
+				//Measuring time required for the operation
 				if(0==status) writeTime	= writeTime + after-before;
 				else readTime	= readTime + after-before;
 

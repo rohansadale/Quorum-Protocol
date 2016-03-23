@@ -11,6 +11,14 @@ import java.io.*;
 import java.util.*;
 import org.apache.thrift.TException;
 
+/*
+This is the client file. It actually connects randomly with any of the file-server and sends the operation to that file-server
+This file takes 3 command line parameters
+	* Configuration file
+	* Optype => 0 for read and 1 for write
+	* filename => only filename not complete path which is to be read or written
+If optype is 1(i.e write operation) this script will read contents of the file and that content will be written on files in the network
+*/
 public class Client
 {
 	private static String CONFIG_FILE_NAME				= "";
@@ -58,6 +66,7 @@ public class Client
 		if(1 == OpType) content					= Util.getInstance().getFileContent(configParam.get(FILE_DIR_KEY)+filename);			
 		try
 		{
+			//Randomly connecting to the node in the network
 			TTransport transport				= new TSocket(configParam.get(COORDINATOR_IP_KEY),Integer.parseInt(configParam.get(COORDINATOR_PORT_KEY)));
 			TProtocol protocol					= new TBinaryProtocol(new TFramedTransport(transport));
 			QuorumService.Client client			= new QuorumService.Client(protocol);
@@ -79,16 +88,17 @@ public class Client
 		}
 	
 		System.out.println("Initially Connected to :- " + startNode.ip + ":" + startNode.port);	
-		Job job									= new Job(startNode,1,OpType,filename,content);
-		TTransport transport					= new TSocket(startNode.ip,startNode.port);
+		Job job									= new Job(startNode,1,OpType,filename,content); //Building the job object
+		TTransport transport					= new TSocket(startNode.ip,startNode.port); //Creating connection with required file-server
 		TProtocol Protocol						= new TBinaryProtocol(new TFramedTransport(transport));
 		QuorumService.Client Client				= new QuorumService.Client(Protocol);
 		transport.open();
-		JobStatus status						= Client.submitJob(job);
+		JobStatus status						= Client.submitJob(job); //Submitting the job
 		transport.close();
-		if(status == null) System.out.println("Unable to finish the job");
+		if(status == null) System.out.println("Unable to finish the job"); 
 		else
 		{
+			//Printing out information about the job
 			System.out.println("Job Status :- " + status.status);
 			if(0==OpType) System.out.println("Content :- " + status.content);
 			System.out.println("Following nodes were contacted :- ");
