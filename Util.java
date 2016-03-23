@@ -105,7 +105,7 @@ public class Util
         {
             br                  = new BufferedReader(new FileReader(filename));
             while((content = br.readLine()) != null)
-                sb.append(content);
+                sb.append(content+"\n");
         }
         catch(IOException e) {}
         finally
@@ -122,10 +122,9 @@ public class Util
 	//Function to write content to the given file
 	public static boolean writeContent(String filename,String content)
 	{
-		System.out.println("File name :- " + filename + " and content " + content);
 		try
 		{
-        	BufferedWriter br   = new BufferedWriter(new FileWriter( filename));
+        	BufferedWriter br   = new BufferedWriter(new FileWriter(filename));
         	br.write(content);
         	br.close();
         }

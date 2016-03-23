@@ -1,11 +1,11 @@
 import java.io.*;
 import java.util.*;
-import java.text.DecimalFormat;
-import java.security.SecureRandom;
 import java.math.BigInteger;
 import java.net.InetAddress;
+import java.util.concurrent.*;
+import java.text.DecimalFormat;
+import java.security.SecureRandom;
 import java.net.UnknownHostException;
-
 /*
 This file is used for testing system under various cirumstances i.e varying workload.
 Paramters Nr and Nw can be set in config.txt
@@ -31,6 +31,8 @@ public class TestCases
 	private static String COORDINATOR_IP_KEY			= "CoordinatorIP";
 	private static String COORDINATOR_PORT_KEY			= "CoordinatorPort";
 	private static String CURRENT_NODE_IP				= "";
+	public static long writeTime						= 0;
+	public static long readTime							= 0;
 
 	public static void main(String []targs)
 	{
@@ -61,15 +63,14 @@ public class TestCases
 		String baseCmdRead								= baseCmd + " 0 ";
 		String baseCmdWrite								= baseCmd + " 1 ";
 		String Write									= "append";
-	
+
 		int writes										= 0;
 		int reads										= 0;
-		long writeTime									= 0;
-		long readTime									= 0;
 		int status										= 0;
 		int tc											= 100;
 		String command									= "";
-
+		ArrayList<WorkerThread> jobs					= new ArrayList<WorkerThread>();	
+	
 		for(int i=0;i<tc;i++)
 		{
 			//Depending upon load-type operation is set
@@ -89,9 +90,14 @@ public class TestCases
 				String filename = filenames[rnd.nextInt(filenames.length)];
 				try
 				{
-					FileWriter	fw = new FileWriter(directory+filename,true);
-					fw.write(new BigInteger(130,new SecureRandom()).toString(32) +  " From " + CURRENT_NODE_IP);
-					fw.write("\n");
+					FileWriter	fw 	= new FileWriter(directory+filename);
+					String str		= new BigInteger(130,new SecureRandom()).toString(32);
+					str				= str.concat(" FROM ");
+					str				= str.concat( CURRENT_NODE_IP);
+					str				= str.concat("\n");
+					BufferedWriter bufferWritter = new BufferedWriter(fw);
+					bufferWritter.write(str);
+					bufferWritter.close();
 					fw.close();
 					command	= baseCmdWrite + filename;
 				}
@@ -103,32 +109,56 @@ public class TestCases
 				command	= baseCmdRead + filenames[rnd.nextInt(filenames.length)];
 			}
 			
-			try
-			{
-				System.out.println("Running command " + command);
-				Runtime r = Runtime.getRuntime();
-				long before	= System.currentTimeMillis();
-				Process p = r.exec(command); //Executing the command 
-				long after  = System.currentTimeMillis();
-				
-				//Measuring time required for the operation
-				if(0==status) writeTime	= writeTime + after-before;
-				else readTime	= readTime + after-before;
-
-				BufferedReader b = new BufferedReader(new InputStreamReader(p.getInputStream()));
-				String line = "";
-	
-				while ((line = b.readLine()) != null) {
-  					System.out.println(line);
-				}
-				b.close();
-			}
-			catch(IOException e) {}
+			WorkerThread jobThread	= new WorkerThread(command,status,(long)0);
+			jobs.add(jobThread);
 		}
+	
+		ExecutorService executor = Executors.newFixedThreadPool(5);
+		for(int i=0;i<jobs.size();i++)
+			executor.execute(jobs.get(i));
+
+		executor.shutdown();
+		while(!executor.isTerminated()) {}
 		
+		for(int i=0;i<jobs.size();i++)
+		{
+			WorkerThread jobThread		= jobs.get(i);
+			if(0==jobThread.Optype)
+				writeTime				= writeTime + jobThread.duration;
+			else
+				readTime				= readTime	+ jobThread.duration;
+		}
+
 		DecimalFormat df 				= new DecimalFormat("#.###");
 		double avgReadTime				= ((double)readTime*1.0)/reads;
 		double avgWriteTime				= ((double)writeTime*1.0)/writes;
 		System.out.println("Average Read Time :- " + df.format(avgReadTime)  + " milli-seconds\nAverage Write Time :- " + df.format(avgWriteTime) + " milli-seconds");
 	}
+		
+	static class WorkerThread implements Runnable
+	{
+		public String command;
+		public int Optype;
+		public long duration;    
+	
+		public WorkerThread(String s,int Optype,long duration){
+        	this.command	= s;
+			this.Optype		= Optype;
+			this.duration 	= duration;
+    	}
+
+		@Override
+		public void run()
+		{
+			try
+			{
+				Runtime r 		= Runtime.getRuntime();
+        	    this.duration  	= System.currentTimeMillis();
+        	    Process p 		= r.exec(this.command); //Executing the command
+         	  	this.duration   = System.currentTimeMillis() - this.duration;
+				System.out.println("Finished running command .... " + this.command);
+			}
+			catch(IOException e) {}
+		}
+	}	
 }
