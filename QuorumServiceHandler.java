@@ -1,9 +1,9 @@
 import java.util.*;
 import java.lang.System;
 import java.lang.Runnable;
-import org.apache.thrift.TException;
+import java.util.concurrent.*;
 import org.apache.thrift.transport.*;
-import java.util.concurrent.locks.Lock;
+import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TProtocol;
 import java.util.concurrent.locks.ReentrantLock;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -23,8 +23,9 @@ public class QuorumServiceHandler implements QuorumService.Iface
 	private static int WriteQuorum				= 0;
 	String [] filenames							= null;	
 	String baseDirectory						= "";
-	Queue<Job> jobQueue							= null;
 	private final ReentrantLock lock 			= new ReentrantLock();
+	private final int MAX_CONCURRENT_READS		= 5;
+	private final Semaphore available			= new Semaphore(MAX_CONCURRENT_READS);
 	
 	/*
 	Initializing the Service Handler with Configuration Parameters
@@ -32,7 +33,6 @@ public class QuorumServiceHandler implements QuorumService.Iface
 	public QuorumServiceHandler(Node coordinatorNode,Node currentNode,String directory,String[] filenames,int ReadQuorum,int WriteQuorum)
 	{
 		activeNodes				= new ArrayList<Node>();
-		jobQueue				= new LinkedList<Job>();
 		activeNodes.add(currentNode);
 	
 		this.CURRENT_NODE_IP	= currentNode.ip;
@@ -154,25 +154,36 @@ public class QuorumServiceHandler implements QuorumService.Iface
 	/*
 	Function that actually establishes TCP connection with required machine on the network and reads the file and returns the content of the file
 	*/
-	private JobStatus doReadJob(String ip,int port,String filename) throws TException,TTransportException
+	private JobStatus doReadJob(String ip,int port,String filename) 
 	{
-		while(lock.isLocked()) {} //This is crucial as we don't need to ensure that no write is happening when we are reading;
-		//Since we are not acquiring lock while reading concurrent reads are supported
+		while(lock.isLocked()) {} //If coordinator is currently processing write request then lock will be in acquired state;
+		//when coordinator is finished with write request then we will proceed with read task as coordinator will release the lock after write request
 		String content				= "";
-    	TTransport transport        = new TSocket(ip,port);
-        TProtocol protocol          = new TBinaryProtocol(new TFramedTransport(transport));
-        QuorumService.Client client = new QuorumService.Client(protocol);
-		transport.open();
-		content 					= client.read(filename,baseDirectory);
-		transport.close();
+		try
+		{
+			available.acquire(); //Acquires permit from this semaphore, blocking until one is available
+    		TTransport transport        = new TSocket(ip,port);
+        	TProtocol protocol          = new TBinaryProtocol(new TFramedTransport(transport));
+        	QuorumService.Client client = new QuorumService.Client(protocol);
+			transport.open();
+			content 					= client.read(filename,baseDirectory);
+			transport.close();
+			available.release(); //Releases a permit, returning it to the semaphore.
+		}
+		catch(InterruptedException e1) {}
+		catch(TException e2) {}
+
 		return new JobStatus(true,content,null);
 	}
 
 	/*
 	Function that actually establishes TCP connection with required machine on the network and writes the file on that machine
 	*/
-	private boolean doWriteJob(String ip,int port,String filename,String content) throws TException,TTransportException
+	private boolean doWriteJob(String ip,int port,String filename,String content) 
 	{
+		//We cannot proceed with write task while read operation are taking place; hence we need to wait till are read operations are completed.
+		//When all read requests are finished then available permits will be its maximum value
+		while(available.availablePermits() != MAX_CONCURRENT_READS) {} 
 		boolean status				= false;
 		try
         {
@@ -185,6 +196,7 @@ public class QuorumServiceHandler implements QuorumService.Iface
         	status 						= client.write(filename,baseDirectory,content);
         	transport.close();
 		}
+		catch(TException e2) {}
 		finally
 		{
 			lock.unlock();
