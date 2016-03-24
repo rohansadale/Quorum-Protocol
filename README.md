@@ -1,1 +1,2 @@
-# Quorum based Protocol
+# Implementation of Quorum based Protocol
+
