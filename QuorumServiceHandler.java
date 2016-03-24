@@ -24,7 +24,7 @@ public class QuorumServiceHandler implements QuorumService.Iface
 	String [] filenames							= null;	
 	String baseDirectory						= "";
 	Queue<Job> jobQueue							= null;
-	private final Lock lock 					= new ReentrantLock();
+	private final ReentrantLock lock 			= new ReentrantLock();
 	
 	/*
 	Initializing the Service Handler with Configuration Parameters
@@ -92,44 +92,34 @@ public class QuorumServiceHandler implements QuorumService.Iface
 	private JobStatus processJob(Job job) throws TException,TTransportException
 	{
 		JobStatus result				= null;
-		try
+		List<Node> requiredNodes	= getNodes(job.optype==0?ReadQuorum:WriteQuorum);
+		String filename				= job.filename;
+		String maxVersion			= "-1";
+		String currentVersion		= "0";
+		int requiredIdx				= -1;
+		for(int i=0;i<requiredNodes.size();i++)
 		{
-			lock.lock();
-			System.out.println("Lock Acquired !!!");
-			List<Node> requiredNodes	= getNodes(job.optype==0?ReadQuorum:WriteQuorum);
-			String filename				= job.filename;
-			String maxVersion			= "-1";
-			String currentVersion		= "0";
-			int requiredIdx				= -1;
-			for(int i=0;i<requiredNodes.size();i++)
+			String ip			= requiredNodes.get(i).ip;
+			int port			= requiredNodes.get(i).port;
+			if(ip.equals(CURRENT_NODE_IP)==true && port == CURRENT_NODE_PORT) 
+				currentVersion	= Util.getInstance().getMaxVersion(filename,baseDirectory);
+			else
 			{
-				String ip			= requiredNodes.get(i).ip;
-				int port			= requiredNodes.get(i).port;
-				if(ip.equals(CURRENT_NODE_IP)==true && port == CURRENT_NODE_PORT) 
-					currentVersion	= Util.getInstance().getMaxVersion(filename,baseDirectory);
-				else
-				{
-					TTransport transport		= new TSocket(ip,port);
-					TProtocol protocol			= new TBinaryProtocol(new TFramedTransport(transport));
-					QuorumService.Client client = new QuorumService.Client(protocol);
-					transport.open();
-					currentVersion				= client.version(filename,baseDirectory);
-					transport.close();
-				}
-				if(currentVersion.compareTo(maxVersion) > 0 )
-				{
-					maxVersion						= currentVersion;
-					requiredIdx						= i;
-				}	
+				TTransport transport		= new TSocket(ip,port);
+				TProtocol protocol			= new TBinaryProtocol(new TFramedTransport(transport));
+				QuorumService.Client client = new QuorumService.Client(protocol);
+				transport.open();
+				currentVersion				= client.version(filename,baseDirectory);
+				transport.close();
 			}
-			result				= doJob(requiredNodes,job,maxVersion,requiredIdx);
-			result.path			= requiredNodes;
+			if(currentVersion.compareTo(maxVersion) > 0 )
+			{
+				maxVersion						= currentVersion;
+				requiredIdx						= i;
+			}	
 		}
-		finally
-		{
-			lock.unlock();
-			System.out.println("Lock Released !!!");
-		}
+		result				= doJob(requiredNodes,job,maxVersion,requiredIdx);
+		result.path			= requiredNodes;
 		return result;
 	}
 
@@ -166,6 +156,8 @@ public class QuorumServiceHandler implements QuorumService.Iface
 	*/
 	private JobStatus doReadJob(String ip,int port,String filename) throws TException,TTransportException
 	{
+		while(lock.isLocked()) {} //This is crucial as we don't need to ensure that no write is happening when we are reading;
+		//Since we are not acquiring lock while reading concurrent reads are supported
 		String content				= "";
     	TTransport transport        = new TSocket(ip,port);
         TProtocol protocol          = new TBinaryProtocol(new TFramedTransport(transport));
@@ -182,12 +174,22 @@ public class QuorumServiceHandler implements QuorumService.Iface
 	private boolean doWriteJob(String ip,int port,String filename,String content) throws TException,TTransportException
 	{
 		boolean status				= false;
-		TTransport transport        = new TSocket(ip,port);
-        TProtocol protocol          = new TBinaryProtocol(new TFramedTransport(transport));
-        QuorumService.Client client = new QuorumService.Client(protocol);
-        transport.open();
-        status 						= client.write(filename,baseDirectory,content);
-        transport.close();
+		try
+        {
+            lock.lock(); //This lock will ensure that writes are performed sequentially
+            System.out.println("Lock Acquired !!!");
+			TTransport transport        = new TSocket(ip,port);
+        	TProtocol protocol          = new TBinaryProtocol(new TFramedTransport(transport));
+        	QuorumService.Client client = new QuorumService.Client(protocol);
+        	transport.open();
+        	status 						= client.write(filename,baseDirectory,content);
+        	transport.close();
+		}
+		finally
+		{
+			lock.unlock();
+            System.out.println("Lock Released !!!");	
+		}
 		return status;
 	}
 
