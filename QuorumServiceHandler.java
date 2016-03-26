@@ -5,7 +5,7 @@ import java.util.concurrent.*;
 import org.apache.thrift.transport.*;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TProtocol;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.apache.thrift.protocol.TBinaryProtocol;
 
 /*
@@ -23,9 +23,7 @@ public class QuorumServiceHandler implements QuorumService.Iface
 	private static int WriteQuorum				= 0;
 	String [] filenames							= null;	
 	String baseDirectory						= "";
-	private final ReentrantLock lock 			= new ReentrantLock();
-	private final int MAX_CONCURRENT_READS		= 5;
-	private final Semaphore available			= new Semaphore(MAX_CONCURRENT_READS);
+	private final ReentrantReadWriteLock lock 	= new ReentrantReadWriteLock();
 	
 	/*
 	Initializing the Service Handler with Configuration Parameters
@@ -73,7 +71,7 @@ public class QuorumServiceHandler implements QuorumService.Iface
         			try
 					{
 						Thread.sleep(SLEEP_TIMEOUT);
-						Util.syncData(activeNodes,baseDirectory,filenames,CURRENT_NODE_IP,CURRENT_NODE_PORT);
+						Util.syncData(activeNodes,baseDirectory,filenames,CURRENT_NODE_IP,CURRENT_NODE_PORT,lock);
 					}
 					catch(InterruptedException ex) {}
 					catch(TTransportException ex) {}
@@ -141,13 +139,28 @@ public class QuorumServiceHandler implements QuorumService.Iface
 		if(job.optype==0) return doReadJob(nodes.get(idx).ip,nodes.get(idx).port,destFilename);
 		else
 		{
+			JobStatus jobStatus	= new JobStatus(false,"",null);
 			boolean status	= false;
-			for(int i=0;i<nodes.size();i++) 
-			{
-				status		= status | doWriteJob(nodes.get(i).ip,nodes.get(i).port,destFilename,job.content);
-				if(false == status) System.out.println(" ========= Unable to write on node : " + nodes.get(i).ip+":"+nodes.get(i).port + " =========== ");
+			try
+			{	
+            	lock.writeLock().lock(); //This lock will ensure that writes are performed sequentially
+				System.out.println("In write function");
+            	System.out.println("Lock Acquired !!!");
+        	//	Thread.sleep(SLEEP_TIMEOUT/6);
+				for(int i=0;i<nodes.size();i++) 
+				{
+					status		= status | doWriteJob(nodes.get(i).ip,nodes.get(i).port,destFilename,job.content);
+					if(false == status) System.out.println(" ========= Unable to write on node : " + nodes.get(i).ip+":"+nodes.get(i).port + " =========== ");
+				}
 			}
-			return new JobStatus(status,"",null);
+        	//catch(InterruptedException ex) {}
+			finally
+			{
+				lock.writeLock().unlock();
+            	System.out.println("Lock Released !!!");	
+			}
+			jobStatus.status	= status;
+			return jobStatus;
 		}
 	}
 
@@ -156,23 +169,26 @@ public class QuorumServiceHandler implements QuorumService.Iface
 	*/
 	private JobStatus doReadJob(String ip,int port,String filename) 
 	{
-		while(lock.isLocked()) {} //If coordinator is currently processing write request then lock will be in acquired state;
 		//when coordinator is finished with write request then we will proceed with read task as coordinator will release the lock after write request
 		String content				= "";
 		try
 		{
-			available.acquire(); //Acquires permit from this semaphore, blocking until one is available
+			lock.readLock().lock();
+			System.out.println("In Read function !!!!");
+        	//Thread.sleep(SLEEP_TIMEOUT/6);
     		TTransport transport        = new TSocket(ip,port);
         	TProtocol protocol          = new TBinaryProtocol(new TFramedTransport(transport));
         	QuorumService.Client client = new QuorumService.Client(protocol);
 			transport.open();
 			content 					= client.read(filename,baseDirectory);
 			transport.close();
-			available.release(); //Releases a permit, returning it to the semaphore.
 		}
-		catch(InterruptedException e1) {}
+		//catch(InterruptedException e1) {}
 		catch(TException e2) {}
-
+		finally
+		{
+			lock.readLock().unlock();
+		}
 		return new JobStatus(true,content,null);
 	}
 
@@ -183,12 +199,9 @@ public class QuorumServiceHandler implements QuorumService.Iface
 	{
 		//We cannot proceed with write task while read operation are taking place; hence we need to wait till are read operations are completed.
 		//When all read requests are finished then available permits will be its maximum value
-		while(available.availablePermits() != MAX_CONCURRENT_READS) {} 
 		boolean status				= false;
 		try
         {
-            lock.lock(); //This lock will ensure that writes are performed sequentially
-            System.out.println("Lock Acquired !!!");
 			TTransport transport        = new TSocket(ip,port);
         	TProtocol protocol          = new TBinaryProtocol(new TFramedTransport(transport));
         	QuorumService.Client client = new QuorumService.Client(protocol);
@@ -197,11 +210,6 @@ public class QuorumServiceHandler implements QuorumService.Iface
         	transport.close();
 		}
 		catch(TException e2) {}
-		finally
-		{
-			lock.unlock();
-            System.out.println("Lock Released !!!");	
-		}
 		return status;
 	}
 
