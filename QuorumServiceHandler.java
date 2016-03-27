@@ -18,7 +18,7 @@ public class QuorumServiceHandler implements QuorumService.Iface
 	private static int CURRENT_NODE_PORT		= 0;
 	private static String COORDINATOR_IP		= "";
 	private static int COORDINATOR_PORT			= 0;
-	private static int SLEEP_TIMEOUT			= 60000;	
+	private static int SLEEP_TIMEOUT			= 60000*2;	
 	private static int ReadQuorum				= 0;
 	private static int WriteQuorum				= 0;
 	String [] filenames							= null;	
@@ -89,35 +89,63 @@ public class QuorumServiceHandler implements QuorumService.Iface
 	*/
 	private JobStatus processJob(Job job) throws TException,TTransportException
 	{
-		JobStatus result				= null;
-		List<Node> requiredNodes	= getNodes(job.optype==0?ReadQuorum:WriteQuorum);
-		String filename				= job.filename;
-		String maxVersion			= "-1";
-		String currentVersion		= "0";
-		int requiredIdx				= -1;
-		for(int i=0;i<requiredNodes.size();i++)
+		JobStatus result			= null;
+		try
 		{
-			String ip			= requiredNodes.get(i).ip;
-			int port			= requiredNodes.get(i).port;
-			if(ip.equals(CURRENT_NODE_IP)==true && port == CURRENT_NODE_PORT) 
-				currentVersion	= Util.getInstance().getMaxVersion(filename,baseDirectory);
-			else
+			if(0==job.optype) 
 			{
-				TTransport transport		= new TSocket(ip,port);
-				TProtocol protocol			= new TBinaryProtocol(new TFramedTransport(transport));
-				QuorumService.Client client = new QuorumService.Client(protocol);
-				transport.open();
-				currentVersion				= client.version(filename,baseDirectory);
-				transport.close();
+				lock.readLock().lock();
+				System.out.println("Acquired Read lock !!!");
 			}
-			if(currentVersion.compareTo(maxVersion) > 0 )
+			else 
 			{
-				maxVersion						= currentVersion;
-				requiredIdx						= i;
-			}	
+				lock.writeLock().lock();
+				System.out.println("Acquired Write lok !!!");
+			}
+
+			List<Node> requiredNodes	= getNodes(job.optype==0?ReadQuorum:WriteQuorum);
+			String filename				= job.filename;
+			String maxVersion			= "-1";
+			String currentVersion		= "0";
+			int requiredIdx				= -1;
+			
+			for(int i=0;i<requiredNodes.size();i++)
+			{
+				String ip			= requiredNodes.get(i).ip;
+				int port			= requiredNodes.get(i).port;
+				if(ip.equals(CURRENT_NODE_IP)==true && port == CURRENT_NODE_PORT) 
+					currentVersion	= Util.getInstance().getMaxVersion(filename,baseDirectory);
+				else
+				{
+					TTransport transport		= new TSocket(ip,port);
+					TProtocol protocol			= new TBinaryProtocol(new TFramedTransport(transport));
+					QuorumService.Client client = new QuorumService.Client(protocol);
+					transport.open();
+					currentVersion				= client.version(filename,baseDirectory);
+					transport.close();
+				}
+				if(currentVersion.compareTo(maxVersion) > 0 )
+				{
+					maxVersion						= currentVersion;
+					requiredIdx						= i;
+				}
+			}
+			result				= doJob(requiredNodes,job,maxVersion,requiredIdx);
+			result.path			= requiredNodes;
 		}
-		result				= doJob(requiredNodes,job,maxVersion,requiredIdx);
-		result.path			= requiredNodes;
+		finally
+		{
+			if(0==job.optype) 
+			{
+				lock.readLock().unlock();
+				System.out.println("Read lock released !!!");
+			}
+			else 
+			{
+				lock.writeLock().unlock();
+				System.out.println("Write lock released !!!");
+			}
+		}
 		return result;
 	}
 
@@ -131,6 +159,7 @@ public class QuorumServiceHandler implements QuorumService.Iface
 	private JobStatus doJob(List<Node> nodes,Job job,String maxVersion,int idx) throws TException,TTransportException
 	{
 		if(idx==-1) return new JobStatus(false,"",null);
+		if(activeNodes.size() >= ReadQuorum+WriteQuorum) return new JobStatus(false,"Quorum Condition not satisfied",null);
 		String destFilename	= job.filename;
 		
 		if(job.optype==0) destFilename  = destFilename + "." + maxVersion;
@@ -141,24 +170,16 @@ public class QuorumServiceHandler implements QuorumService.Iface
 		{
 			JobStatus jobStatus	= new JobStatus(false,"",null);
 			boolean status	= false;
-			try
-			{	
-            	lock.writeLock().lock(); //This lock will ensure that writes are performed sequentially
-				System.out.println("In write function");
-            	System.out.println("Lock Acquired !!!");
-        	//	Thread.sleep(SLEEP_TIMEOUT/6);
+			//try
+			//{	
+        		//Thread.sleep(SLEEP_TIMEOUT/6);
 				for(int i=0;i<nodes.size();i++) 
 				{
 					status		= status | doWriteJob(nodes.get(i).ip,nodes.get(i).port,destFilename,job.content);
 					if(false == status) System.out.println(" ========= Unable to write on node : " + nodes.get(i).ip+":"+nodes.get(i).port + " =========== ");
 				}
-			}
+			//}
         	//catch(InterruptedException ex) {}
-			finally
-			{
-				lock.writeLock().unlock();
-            	System.out.println("Lock Released !!!");	
-			}
 			jobStatus.status	= status;
 			return jobStatus;
 		}
@@ -173,7 +194,6 @@ public class QuorumServiceHandler implements QuorumService.Iface
 		String content				= "";
 		try
 		{
-			lock.readLock().lock();
 			System.out.println("In Read function !!!!");
         	//Thread.sleep(SLEEP_TIMEOUT/6);
     		TTransport transport        = new TSocket(ip,port);
@@ -185,10 +205,6 @@ public class QuorumServiceHandler implements QuorumService.Iface
 		}
 		//catch(InterruptedException e1) {}
 		catch(TException e2) {}
-		finally
-		{
-			lock.readLock().unlock();
-		}
 		return new JobStatus(true,content,null);
 	}
 

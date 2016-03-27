@@ -67,7 +67,7 @@ public class TestCases
 		int writes										= 0;
 		int reads										= 0;
 		int status										= 0;
-		int tc											= 100;
+		int tc											= 1000;
 		String command									= "";
 		ArrayList<WorkerThread> jobs					= new ArrayList<WorkerThread>();	
 	
@@ -77,11 +77,11 @@ public class TestCases
 			if(loadType == 0)
 				status		= rnd.nextInt(2);
 			else if(loadType == 1)
-				status		= rnd.nextInt(5);
+				status		= rnd.nextInt(10);
 			else
 			{
-				status		= rnd.nextInt(5);
-				if(status<4) status = 0; //making write-heavy 
+				status		= rnd.nextInt(10);
+				if(status<9) status = 0; //making write-heavy 
 			}
 			
 			if(0==status)
@@ -90,12 +90,12 @@ public class TestCases
 				String filename = filenames[rnd.nextInt(filenames.length)];
 				try
 				{
-					FileWriter	fw 	= new FileWriter(directory+filename);
-					String str		= new BigInteger(130,new SecureRandom()).toString(32);
-					str				= str.concat(" FROM ");
-					str				= str.concat( CURRENT_NODE_IP);
-					str				= str.concat("\n");
-					BufferedWriter bufferWritter = new BufferedWriter(fw);
+					FileWriter	fw 				= new FileWriter(directory+filename);
+					String str					= new BigInteger(130,new SecureRandom()).toString(32);
+					str							= str.concat(" FROM ");
+					str							= str.concat( CURRENT_NODE_IP);
+					str							= str.concat("\n");
+					BufferedWriter bufferWritter= new BufferedWriter(fw);
 					bufferWritter.write(str);
 					bufferWritter.close();
 					fw.close();
@@ -115,7 +115,10 @@ public class TestCases
 	
 		ExecutorService executor = Executors.newFixedThreadPool(5);
 		for(int i=0;i<jobs.size();i++)
+		{
 			executor.execute(jobs.get(i));
+			if(i>0 && 0==i%100) System.out.println("Finished running " + i + " commands");
+		}
 
 		executor.shutdown();
 		while(!executor.isTerminated()) {}
@@ -156,7 +159,6 @@ public class TestCases
         	    this.duration  	= System.currentTimeMillis();
         	    Process p 		= r.exec(this.command); //Executing the command
          	  	this.duration   = System.currentTimeMillis() - this.duration;
-				System.out.println("Finished running command .... " + this.command);
 			}
 			catch(IOException e) {}
 		}

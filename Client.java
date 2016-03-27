@@ -95,15 +95,21 @@ public class Client
 		transport.open();
 		JobStatus status						= Client.submitJob(job); //Submitting the job
 		transport.close();
-		if(status == null) System.out.println("Unable to finish the job"); 
+		if(status == null) 
+		{
+			System.out.println("Unable to finish the job"); 
+		}
 		else
 		{
 			//Printing out information about the job
 			System.out.println("Job Status :- " + status.status);
-			if(0==OpType) System.out.println("Content :- " + status.content);
-			System.out.println("Following nodes were contacted :- ");
-			for(int i=0;status.path != null && i<status.path.size();i++)
-				System.out.println(status.path.get(i).ip + ":" + status.path.get(i).port);
+			System.out.println("Content :- " + status.content);
+			if(status.path != null )
+			{
+				System.out.println("Following nodes were contacted :- ");
+				for(int i=0;status.path != null && i<status.path.size();i++)
+					System.out.println(status.path.get(i).ip + ":" + status.path.get(i).port);
+			}
 		}
 	}
 }
