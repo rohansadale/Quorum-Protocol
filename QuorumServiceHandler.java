@@ -18,17 +18,18 @@ public class QuorumServiceHandler implements QuorumService.Iface
 	private static int CURRENT_NODE_PORT		= 0;
 	private static String COORDINATOR_IP		= "";
 	private static int COORDINATOR_PORT			= 0;
-	private static int SLEEP_TIMEOUT			= 60000*2;	
+	private static int syncInterval				= 300000;	
 	private static int ReadQuorum				= 0;
 	private static int WriteQuorum				= 0;
 	String [] filenames							= null;	
 	String baseDirectory						= "";
 	private final ReentrantReadWriteLock lock 	= new ReentrantReadWriteLock();
+	private static HashMap<Node,HashMap<String,Integer> > versions;
 	
 	/*
 	Initializing the Service Handler with Configuration Parameters
 	*/	
-	public QuorumServiceHandler(Node coordinatorNode,Node currentNode,String directory,String[] filenames,int ReadQuorum,int WriteQuorum)
+	public QuorumServiceHandler(Node coordinatorNode,Node currentNode,String directory,String[] filenames,int ReadQuorum,int WriteQuorum,int syncInterval)
 	{
 		activeNodes				= new ArrayList<Node>();
 		activeNodes.add(currentNode);
@@ -40,7 +41,10 @@ public class QuorumServiceHandler implements QuorumService.Iface
 		this.baseDirectory		= directory;	
 		this.ReadQuorum			= ReadQuorum;
 		this.WriteQuorum		= WriteQuorum;
+		this.syncInterval		= syncInterval;
 		this.filenames			= new String[filenames.length];
+		this.versions			= new HashMap<Node,HashMap<String,Integer> >();
+	
 		for(int i=0;i<filenames.length;i++)
 			this.filenames[i]	= filenames[i];
 	}
@@ -70,7 +74,7 @@ public class QuorumServiceHandler implements QuorumService.Iface
 				{
         			try
 					{
-						Thread.sleep(SLEEP_TIMEOUT);
+						Thread.sleep(syncInterval);
 						Util.syncData(activeNodes,baseDirectory,filenames,CURRENT_NODE_IP,CURRENT_NODE_PORT,lock);
 					}
 					catch(InterruptedException ex) {}
@@ -89,19 +93,23 @@ public class QuorumServiceHandler implements QuorumService.Iface
 	*/
 	private JobStatus processJob(Job job) throws TException,TTransportException
 	{
+		if(0==versions.size())
+		{
+			for(int i=0;i<activeNodes.size();i++)
+			{
+				HashMap<String,Integer> tfileVersion	= new HashMap<String,Integer>();
+				for(int j=0;j<this.filenames.length;j++) tfileVersion.put(this.filenames[j],0);			
+				versions.put(activeNodes.get(i),tfileVersion);
+			}
+		}
+
 		JobStatus result			= null;
 		try
 		{
 			if(0==job.optype) 
-			{
 				lock.readLock().lock();
-				System.out.println("Acquired Read lock !!!");
-			}
 			else 
-			{
 				lock.writeLock().lock();
-				System.out.println("Acquired Write lok !!!");
-			}
 
 			List<Node> requiredNodes	= getNodes(job.optype==0?ReadQuorum:WriteQuorum);
 			String filename				= job.filename;
@@ -132,19 +140,14 @@ public class QuorumServiceHandler implements QuorumService.Iface
 			}
 			result				= doJob(requiredNodes,job,maxVersion,requiredIdx);
 			result.path			= requiredNodes;
+			if(job.optype != 0) Util.getInstance().printSystem(versions);
 		}
 		finally
 		{
 			if(0==job.optype) 
-			{
 				lock.readLock().unlock();
-				System.out.println("Read lock released !!!");
-			}
 			else 
-			{
 				lock.writeLock().unlock();
-				System.out.println("Write lock released !!!");
-			}
 		}
 		return result;
 	}
@@ -172,11 +175,19 @@ public class QuorumServiceHandler implements QuorumService.Iface
 			boolean status	= false;
 			//try
 			//{	
-        		//Thread.sleep(SLEEP_TIMEOUT/6);
+        		//Thread.sleep(syncInterval/6);
 				for(int i=0;i<nodes.size();i++) 
 				{
 					status		= status | doWriteJob(nodes.get(i).ip,nodes.get(i).port,destFilename,job.content);
-					if(false == status) System.out.println(" ========= Unable to write on node : " + nodes.get(i).ip+":"+nodes.get(i).port + " =========== ");
+					if(false == status) System.out.println(" ========= Unable to write on node : " + nodes.get(i).ip+":"+nodes.get(i).port + " =========== ");	
+					else
+					{
+						if(versions.containsKey(nodes.get(i)) && versions.get(nodes.get(i)).containsKey(job.filename))
+						{
+							HashMap<String,Integer> tVersion	= versions.get(nodes.get(i));
+							tVersion.put(job.filename,Integer.parseInt(maxVersion)+1);
+						}
+					}
 				}
 			//}
         	//catch(InterruptedException ex) {}
@@ -194,8 +205,7 @@ public class QuorumServiceHandler implements QuorumService.Iface
 		String content				= "";
 		try
 		{
-			System.out.println("In Read function !!!!");
-        	//Thread.sleep(SLEEP_TIMEOUT/6);
+        	//Thread.sleep(syncInterval/6);
     		TTransport transport        = new TSocket(ip,port);
         	TProtocol protocol          = new TBinaryProtocol(new TFramedTransport(transport));
         	QuorumService.Client client = new QuorumService.Client(protocol);
@@ -255,7 +265,6 @@ public class QuorumServiceHandler implements QuorumService.Iface
 	@Override
 	public Node GetNode() throws TException
 	{
-		System.out.println("Selecting random Node ....");
 		int seed = (int)((long)System.currentTimeMillis() % 1000);
 		Random rnd = new Random(seed);
 		return activeNodes.get(rnd.nextInt(activeNodes.size()));

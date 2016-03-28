@@ -24,6 +24,7 @@ public class Coordinator
 	private static String QUORUM_WRITE_KEY				= "QuorumWrite";
 	private static String FILE_DIR_KEY					= "FileDirectory";
 	private static String COORDINATOR_PORT_KEY			= "CoordinatorPort";
+	private static String SYNC_INTERVAL_KEY				= "SyncInterval";
 
 	public static void main(String targs[]) throws TException
 	{
@@ -57,7 +58,8 @@ public class Coordinator
 		QuorumServiceHandler quorum			= new QuorumServiceHandler(currentNode,currentNode,configParam.get(FILE_DIR_KEY),
 																		configParam.get(FILE_KEY).split(","),
 																		Integer.parseInt(configParam.get(QUORUM_READ_KEY)),
-																		Integer.parseInt(configParam.get(QUORUM_WRITE_KEY)));
+																		Integer.parseInt(configParam.get(QUORUM_WRITE_KEY)),
+																		Integer.parseInt(configParam.get(SYNC_INTERVAL_KEY)));
 		//Initializing the server
 		TThreadPoolServer server			= Util.getInstance().getQuorumServer(Integer.parseInt(configParam.get(COORDINATOR_PORT_KEY)),quorum);	
 		quorum.syncJob(); //Starts a thread to sync job across different machines

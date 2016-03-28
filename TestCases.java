@@ -112,13 +112,11 @@ public class TestCases
 			WorkerThread jobThread	= new WorkerThread(command,status,(long)0);
 			jobs.add(jobThread);
 		}
-	
-		ExecutorService executor = Executors.newFixedThreadPool(5);
+
+		System.out.println("Running 1000 jobs with concurrency level of 10. It may take some time to run");	
+		ExecutorService executor = Executors.newFixedThreadPool(10);
 		for(int i=0;i<jobs.size();i++)
-		{
 			executor.execute(jobs.get(i));
-			if(i>0 && 0==i%100) System.out.println("Finished running " + i + " commands");
-		}
 
 		executor.shutdown();
 		while(!executor.isTerminated()) {}

@@ -28,6 +28,7 @@ public class FileServer
 	private static String COORDINATOR_IP				= "CoordinatorIP";
 	private static String COORDINATOR_PORT				= "CoordinatorPort";
 	private static List<Node> activeNodes				= null;	
+	private static String SYNC_INTERVAL_KEY             = "SyncInterval";
 
 	public static void main(String targs[]) throws TException
 	{
@@ -84,7 +85,8 @@ public class FileServer
 			QuorumServiceHandler quorum			= new QuorumServiceHandler(coordinatorNode,currentNode,configParam.get(FILE_DIR_KEY),
 																			configParam.get(FILE_KEY).split(","),
 																			Integer.parseInt(configParam.get(QUORUM_READ_KEY)),
-																			Integer.parseInt(configParam.get(QUORUM_WRITE_KEY)));
+																			Integer.parseInt(configParam.get(QUORUM_WRITE_KEY)),
+																			Integer.parseInt(configParam.get(SYNC_INTERVAL_KEY)));
 			TThreadPoolServer server			= Util.getInstance().getQuorumServer(CURRENT_NODE_PORT,quorum);//Starting server to listen ot client requests
 			System.out.println("Starting fileServer at " + CURRENT_NODE_IP + " and Port " + CURRENT_NODE_PORT + "  ....");
 			server.serve();

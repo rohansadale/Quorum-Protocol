@@ -158,12 +158,14 @@ public class Util
 	public static void syncData(List<Node> activeNodes,String directory,String [] filenames,
 							String CoordinatorIP,int CoordinatorPort,ReentrantReadWriteLock lock) throws TTransportException,TException 
 	{
+		System.out.println("Backgorund sync started !!!!!");
 		for(int i=0;i<filenames.length;i++)
 		{
+			System.out.println("\n===================================================\n");
+			System.out.println("Syncing file " + filenames[i] + " across all nodes");
 			String maxVersion		= "0";
 			int requiredIdx			= -1;
 			String currentVersion	= "";	
-			System.out.println("Starting syncing file " + filenames[i]);
 			try
 			{
 				lock.readLock().lock();
@@ -223,7 +225,6 @@ public class Util
 					for(int j=0;j<activeNodes.size();j++)
 					{
 						if(j == requiredIdx) continue;
-						System.out.println("Syncing data at " + activeNodes.get(j).ip+":"+activeNodes.get(j).port + " with content " + content);
 						if(activeNodes.get(j).ip.equals(CoordinatorIP)==true && CoordinatorPort==activeNodes.get(j).port)
 							Util.writeContent(directory+requiredFileName,content);
 						else
@@ -235,9 +236,7 @@ public class Util
 							boolean hasWritten					= writeClient.write(requiredFileName,directory,content);
 							System.out.println("Writing to " + activeNodes.get(j).ip + " with port " + activeNodes.get(j).port);
 							if(hasWritten==false)
-							{
 								System.out.println("Unable to write on node " + activeNodes.get(j).ip + " with port " + activeNodes.get(j).port);
-							}
 							writeTransport.close();
 						}
 					}
@@ -247,7 +246,22 @@ public class Util
 					lock.writeLock().unlock();
 				}
 			}
-			System.out.println(" ========================================================= " );
+			System.out.println(filenames[i] + " successfully synced across all nodes");
+			System.out.println("\n===================================================\n");
 		}
+	}
+	
+	public static void printSystem(HashMap<Node,HashMap<String,Integer> > versions)
+	{
+		System.out.println();
+		System.out.println("Printing Node along with version of file that they have. Version 0 implies that file is not present on that server");
+		for(Map.Entry< Node,HashMap<String,Integer> > entry: versions.entrySet())
+		{
+			System.out.print(entry.getKey().ip+":"+entry.getKey().port+ " :- ");
+			for(Map.Entry< String,Integer > nestedEntry: entry.getValue().entrySet())
+				System.out.print("[" + nestedEntry.getKey() + " " + nestedEntry.getValue() + "],");
+			System.out.println();
+		}
+		System.out.println();
 	}
 }
