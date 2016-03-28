@@ -1,6 +1,7 @@
-QuorumRead:5
-QuorumWrite:6
-CoordinatorPort:9090
+QuorumRead:2
+QuorumWrite:2
+CoordinatorPort:9094
 CoordinatorIP:csel-x30-01.cselabs.umn.edu
 FileDirectory:/export/scratch/
 Files:first.txt,hello.txt,play.txt,second.txt,test.txt,third.txt,world.txt
+SyncInterval:30000
