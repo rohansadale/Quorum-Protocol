@@ -113,8 +113,8 @@ public class TestCases
 			jobs.add(jobThread);
 		}
 
-		System.out.println("Running 1000 jobs with concurrency level of 10. It may take some time to run");	
-		ExecutorService executor = Executors.newFixedThreadPool(10);
+		System.out.println("Running 1000 jobs with concurrency level of 20 i.e 20 requests are fired simaltaneously. It may take some time to run");	
+		ExecutorService executor = Executors.newFixedThreadPool(20);
 		for(int i=0;i<jobs.size();i++)
 			executor.execute(jobs.get(i));
 

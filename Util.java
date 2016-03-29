@@ -156,7 +156,8 @@ public class Util
 	and after getting latest version it replicates the content across all the nodes that don't have latest copy
 	*/	
 	public static void syncData(List<Node> activeNodes,String directory,String [] filenames,
-							String CoordinatorIP,int CoordinatorPort,ReentrantReadWriteLock lock) throws TTransportException,TException 
+							String CoordinatorIP,int CoordinatorPort,ReentrantReadWriteLock lock,
+							HashMap<Node,HashMap<String,Integer> > versions) throws TTransportException,TException 
 	{
 		System.out.println("Backgorund sync started !!!!!");
 		for(int i=0;i<filenames.length;i++)
@@ -224,6 +225,7 @@ public class Util
 					lock.writeLock().lock();	
 					for(int j=0;j<activeNodes.size();j++)
 					{
+						versions.get(activeNodes.get(j)).put(filenames[i],Integer.parseInt(maxVersion));
 						if(j == requiredIdx) continue;
 						if(activeNodes.get(j).ip.equals(CoordinatorIP)==true && CoordinatorPort==activeNodes.get(j).port)
 							Util.writeContent(directory+requiredFileName,content);

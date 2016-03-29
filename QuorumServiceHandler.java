@@ -75,7 +75,7 @@ public class QuorumServiceHandler implements QuorumService.Iface
         			try
 					{
 						Thread.sleep(syncInterval);
-						Util.syncData(activeNodes,baseDirectory,filenames,CURRENT_NODE_IP,CURRENT_NODE_PORT,lock);
+						Util.syncData(activeNodes,baseDirectory,filenames,CURRENT_NODE_IP,CURRENT_NODE_PORT,lock,versions);
 					}
 					catch(InterruptedException ex) {}
 					catch(TTransportException ex) {}
