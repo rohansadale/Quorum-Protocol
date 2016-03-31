@@ -31,8 +31,6 @@ public class TestCases
 	private static String COORDINATOR_IP_KEY			= "CoordinatorIP";
 	private static String COORDINATOR_PORT_KEY			= "CoordinatorPort";
 	private static String CURRENT_NODE_IP				= "";
-	public static long writeTime						= 0;
-	public static long readTime							= 0;
 
 	public static void main(String []targs)
 	{
@@ -64,10 +62,12 @@ public class TestCases
 		String baseCmdWrite								= baseCmd + " 1 ";
 		String Write									= "append";
 
+		long writeTime									= 0;
+		long readTime									= 0;
 		int writes										= 0;
 		int reads										= 0;
 		int status										= 0;
-		int tc											= 1000;
+		int tc											= 100;
 		String command									= "";
 		ArrayList<WorkerThread> jobs					= new ArrayList<WorkerThread>();	
 	
@@ -113,30 +113,19 @@ public class TestCases
 			jobs.add(jobThread);
 		}
 
-		System.out.println("Running 1000 jobs with concurrency level of 20 i.e 20 requests are fired simaltaneously. It may take some time to run");	
-		ExecutorService executor = Executors.newFixedThreadPool(20);
-		for(int i=0;i<jobs.size();i++)
-			executor.execute(jobs.get(i));
-
-		executor.shutdown();
-		while(!executor.isTerminated()) {}
-		
-		for(int i=0;i<jobs.size();i++)
+		System.out.println("Running 100 jobs ...");
+		try
 		{
-			WorkerThread jobThread		= jobs.get(i);
-			if(0==jobThread.Optype)
-				writeTime				= writeTime + jobThread.duration;
-			else
-				readTime				= readTime	+ jobThread.duration;
-		}
+			for(int i=0;i<jobs.size();i++)
+				jobs.get(i).start();
 
-		DecimalFormat df 				= new DecimalFormat("#.###");
-		double avgReadTime				= ((double)readTime*1.0)/reads;
-		double avgWriteTime				= ((double)writeTime*1.0)/writes;
-		System.out.println("Average Read Time :- " + df.format(avgReadTime)  + " milli-seconds\nAverage Write Time :- " + df.format(avgWriteTime) + " milli-seconds");
+			for(int i=0;i<jobs.size();i++)
+				jobs.get(i).join();
+		}
+		catch(InterruptedException e){}
 	}
 		
-	static class WorkerThread implements Runnable
+	static class WorkerThread extends Thread
 	{
 		public String command;
 		public int Optype;
@@ -148,7 +137,6 @@ public class TestCases
 			this.duration 	= duration;
     	}
 
-		@Override
 		public void run()
 		{
 			try
